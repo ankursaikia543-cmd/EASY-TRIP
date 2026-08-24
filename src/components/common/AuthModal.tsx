@@ -34,6 +34,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [selectedRole, setSelectedRole] = useState<UserRole>(defaultRole);
   const [mode, setMode] = useState<'login' | 'register'>('login');
 
+  // Sync selectedRole when modal opens with a specific defaultRole
+  React.useEffect(() => {
+    if (isOpen) {
+      setSelectedRole(defaultRole);
+      setErrorMessage('');
+      setSuccessMessage('');
+    }
+  }, [isOpen, defaultRole]);
+
   // Customer Form State
   const [customerPhone, setCustomerPhone] = useState('8638803320');
   const [customerName, setCustomerName] = useState('Ankur Saikia');
@@ -157,13 +166,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <span>EASY TRIP LOGIN</span>
           </h2>
           <p className="text-xs text-emerald-50 font-medium mt-1">
-            Sign in as Passenger (Customer) or Driver Partner across Golaghat District.
+            Access Passenger, Driver Partner, or Super Admin Control Center.
           </p>
         </div>
 
-        {/* 2 Role Selection Tabs for Public Access */}
+        {/* 3 Role Selection Tabs for Complete Access */}
         <div className="p-4 bg-slate-50 border-b border-slate-200">
-          <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/80 rounded-2xl">
+          <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200/80 rounded-2xl">
             
             {/* Customer Tab */}
             <button
@@ -173,13 +182,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 setErrorMessage('');
                 setSuccessMessage('');
               }}
-              className={`py-2.5 px-3 rounded-xl font-display font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 px-2 rounded-xl font-display font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
                 selectedRole === 'customer'
                   ? 'bg-white text-emerald-800 shadow-md ring-2 ring-emerald-500/30'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <User className="w-4 h-4 text-emerald-600" />
+              <User className="w-3.5 h-3.5 text-emerald-600" />
               <span>Customer</span>
             </button>
 
@@ -191,14 +200,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 setErrorMessage('');
                 setSuccessMessage('');
               }}
-              className={`py-2.5 px-3 rounded-xl font-display font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 px-2 rounded-xl font-display font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
                 selectedRole === 'driver'
                   ? 'bg-white text-orange-800 shadow-md ring-2 ring-orange-500/30'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Car className="w-4 h-4 text-orange-600" />
-              <span>Driver Partner</span>
+              <Car className="w-3.5 h-3.5 text-orange-600" />
+              <span>Driver</span>
+            </button>
+
+            {/* Admin Tab */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedRole('admin');
+                setErrorMessage('');
+                setSuccessMessage('');
+              }}
+              className={`py-2 px-2 rounded-xl font-display font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                selectedRole === 'admin'
+                  ? 'bg-slate-950 text-white shadow-md ring-2 ring-slate-800'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Admin HQ</span>
             </button>
 
           </div>
