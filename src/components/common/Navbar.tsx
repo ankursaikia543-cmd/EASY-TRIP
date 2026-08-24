@@ -160,6 +160,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                   Earnings (₹{driverProfile?.todayEarnings || 0})
                 </button>
                 <button
+                  onClick={() => onNavigate('driver-welfare')}
+                  className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1 ${
+                    currentView === 'driver-welfare' 
+                      ? 'bg-emerald-600 text-white font-bold shadow-xs' 
+                      : 'text-emerald-800 bg-emerald-50 hover:bg-emerald-100 font-bold'
+                  }`}
+                  title="EPFO & ESIC Government Welfare and Medical Insurance"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>EPFO & ESIC Welfare</span>
+                </button>
+                <button
                   onClick={() => onNavigate('driver-kyc')}
                   className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all ${
                     currentView === 'driver-kyc' 
@@ -184,6 +196,16 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                 Bokakhat Admin Console
               </button>
             )}
+
+            {/* Android APK Download Button in Navbar */}
+            <a
+              href="/easytrip.apk"
+              download
+              className="px-3 py-1 rounded-full text-xs font-black bg-slate-950 text-white hover:bg-slate-800 transition-colors flex items-center gap-1 shadow-2xs"
+              title="Download Android APK"
+            >
+              <span>📱 Download APK</span>
+            </a>
           </nav>
 
           {/* Right Header Actions */}
@@ -258,14 +280,14 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                     onClick={() => handleRoleSelect('customer')}
                     className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-colors ${user?.role === 'customer' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-700 hover:bg-slate-50'}`}
                   >
-                    <span>👤 Customer (Ankur S. - Bokakhat)</span>
+                    <span>👤 Customer {user?.role === 'customer' ? `(${user.name})` : 'Portal'}</span>
                     {user?.role === 'customer' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
                   </button>
                   <button
                     onClick={() => handleRoleSelect('driver')}
                     className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-colors ${user?.role === 'driver' ? 'bg-orange-50 text-orange-800 font-bold' : 'text-slate-700 hover:bg-slate-50'}`}
                   >
-                    <span>🚗 Driver (Pranjal B. - Bokakhat)</span>
+                    <span>🚗 Driver {user?.role === 'driver' ? `(${user.name})` : 'Partner Portal'}</span>
                     {user?.role === 'driver' && <CheckCircle2 className="w-4 h-4 text-orange-600" />}
                   </button>
                   {user?.role === 'admin' && (
@@ -361,10 +383,12 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                   className="flex items-center gap-2 cursor-pointer p-1 rounded-full hover:bg-emerald-50 transition-colors"
                 >
                   <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
-                    {user.name ? user.name[0].toUpperCase() : 'U'}
+                    {((user.role === 'driver' && driverProfile?.name) ? driverProfile.name : user.name || 'U')[0].toUpperCase()}
                   </div>
                   <div className="hidden lg:block text-left pr-1">
-                    <div className="text-xs font-bold text-slate-900 truncate max-w-[100px]">{user.name}</div>
+                    <div className="text-xs font-bold text-slate-900 truncate max-w-[140px]">
+                      {(user.role === 'driver' && driverProfile?.name) ? driverProfile.name : user.name}
+                    </div>
                     <div className="text-[10px] text-orange-600 font-semibold capitalize">{user.role}</div>
                   </div>
                 </div>
@@ -481,6 +505,13 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                 className="w-full text-left px-3 py-2 text-sm font-medium rounded-lg text-slate-700 hover:bg-slate-100"
               >
                 Earnings
+              </button>
+              <button
+                onClick={() => { onNavigate('driver-welfare'); setShowMobileMenu(false); }}
+                className="w-full text-left px-3 py-2 text-sm font-bold rounded-lg text-emerald-800 bg-emerald-50 hover:bg-emerald-100 flex items-center justify-between"
+              >
+                <span>🛡️ EPFO & ESIC Welfare</span>
+                <span className="text-[10px] bg-emerald-200 px-2 py-0.5 rounded-full font-black text-emerald-950">PROFIT & HEALTH</span>
               </button>
               <button
                 onClick={() => { onNavigate('driver-kyc'); setShowMobileMenu(false); }}

@@ -44,17 +44,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   }, [isOpen, defaultRole]);
 
   // Customer Form State
-  const [customerPhone, setCustomerPhone] = useState('8638803320');
-  const [customerName, setCustomerName] = useState('Ankur Saikia');
-  const [customerEmail, setCustomerEmail] = useState('ankursaikia543@gmail.com');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [otpCode, setOtpCode] = useState('5432');
   const [otpSent, setOtpSent] = useState(false);
 
   // Driver Form State
-  const [driverPhone, setDriverPhone] = useState('7002754262');
-  const [driverName, setDriverName] = useState('Pranjal Bora');
+  const [driverPhone, setDriverPhone] = useState('');
+  const [driverName, setDriverName] = useState('');
   const [driverVehicle, setDriverVehicle] = useState<VehicleType>('cab');
-  const [driverVehicleNo, setDriverVehicleNo] = useState('AS 05 C 4421');
+  const [driverVehicleNo, setDriverVehicleNo] = useState('');
   const [driverTown, setDriverTown] = useState('Bokakhat');
 
   // Admin Form State

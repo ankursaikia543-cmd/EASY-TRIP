@@ -20,6 +20,8 @@ interface AuthContextType {
   updateDriverProfile: (updates: Partial<DriverProfile>) => void;
   adminApproveDriver: (driverId: string) => void;
   adminRejectDriver: (driverId: string, reason?: string) => void;
+  payDriverAdminFee: (driverId: string, amount: number, upiTxnId: string, method?: string, bookingCount?: number) => void;
+  adminToggleDriverFeeStatus: (driverId: string, isPaid: boolean, dueAmount?: number) => void;
   topUpWallet: (amount: number) => void;
   allDrivers: DriverProfile[];
   allUsers: UserProfile[];
@@ -132,10 +134,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (!targetUser) {
-        // Create user
+        // Create new user with the exact name provided
+        const finalName = name && name.trim() ? name.trim() : (role === 'admin' ? 'EASY TRIP Admin' : role === 'driver' ? 'Driver Partner' : 'Customer');
         const newUser: UserProfile = {
           id: `user-${role}-${Date.now()}`,
-          name: name || (role === 'admin' ? 'EASY TRIP Admin' : role === 'driver' ? 'New Driver' : 'Customer'),
+          name: finalName,
           email: email || `${role}@easytrip.in`,
           phone: '+91 98765 00000',
           role,
@@ -146,6 +149,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         setAllUsers(prev => [...prev, newUser]);
         targetUser = newUser;
+      } else if (name && name.trim() && targetUser.name !== name.trim()) {
+        // If user logged in specifying an explicit name, update and personalize their profile name
+        const updatedUser: UserProfile = { ...targetUser, name: name.trim(), updatedAt: new Date().toISOString() };
+        setAllUsers(prev => prev.map(u => u.id === targetUser!.id ? updatedUser : u));
+        targetUser = updatedUser;
       }
 
       setUser(targetUser);
@@ -187,6 +195,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             createdAt: new Date().toISOString(),
           };
           setAllDrivers(prev => [...prev, drv!]);
+        } else if (name && name.trim() && drv.name !== name.trim()) {
+          drv = { ...drv, name: name.trim() };
+          setAllDrivers(prev => prev.map(d => d.id === drv!.id ? drv! : d));
         }
         setDriverProfile(drv);
       }
@@ -337,6 +348,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
+  const payDriverAdminFee = (
+    driverId: string, 
+    amount: number, 
+    upiTxnId: string, 
+    method: string = 'google_pay_upi', 
+    bookingCount: number = 1
+  ) => {
+    setAllDrivers(prev => prev.map(d => {
+      if (d.id === driverId) {
+        const newRecord = {
+          id: `fee-${Date.now()}`,
+          driverId,
+          driverName: d.name,
+          driverPhone: d.phone,
+          vehicleType: d.vehicleType,
+          amount,
+          bookingCount,
+          upiTransactionId: upiTxnId.trim() || `GPay-UPI-${Math.floor(100000000 + Math.random() * 900000000)}`,
+          paymentDate: new Date().toISOString(),
+          status: 'verified' as const,
+          method: (method as any) || 'google_pay_upi',
+        };
+
+        const updated: DriverProfile = {
+          ...d,
+          isFeePaid: true,
+          feeDueAmount: 0,
+          lastFeePaidDate: new Date().toISOString(),
+          totalFeePaidToAdmin: (d.totalFeePaidToAdmin || 0) + amount,
+          feePaymentHistory: [newRecord, ...(d.feePaymentHistory || [])],
+        };
+
+        if (driverProfile?.id === driverId) {
+          setDriverProfile(updated);
+        }
+        SupabaseService.syncDriver(updated);
+        return updated;
+      }
+      return d;
+    }));
+  };
+
+  const adminToggleDriverFeeStatus = (driverId: string, isPaid: boolean, dueAmount: number = 0) => {
+    setAllDrivers(prev => prev.map(d => {
+      if (d.id === driverId) {
+        const updated: DriverProfile = {
+          ...d,
+          isFeePaid: isPaid,
+          feeDueAmount: isPaid ? 0 : (dueAmount || (d.vehicleType === 'cab' ? 50 : 5)),
+          lastFeePaidDate: isPaid ? new Date().toISOString() : d.lastFeePaidDate,
+        };
+        if (driverProfile?.id === driverId) {
+          setDriverProfile(updated);
+        }
+        SupabaseService.syncDriver(updated);
+        return updated;
+      }
+      return d;
+    }));
+  };
+
   // Single Slot Admin Account Registration
   const claimSingleAdminSlot = async (name: string, email: string, phone: string, pin: string) => {
     setIsLoading(true);
@@ -427,6 +499,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateDriverProfile,
         adminApproveDriver,
         adminRejectDriver,
+        payDriverAdminFee,
+        adminToggleDriverFeeStatus,
         topUpWallet,
         allDrivers,
         allUsers,

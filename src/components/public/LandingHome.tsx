@@ -105,6 +105,25 @@ export const LandingHome: React.FC<LandingHomeProps> = ({ onBookNow, onDriveWith
                 <span>Bokakhat HQ Support</span>
               </div>
             </div>
+
+            {/* Android APK Download Action */}
+            <div className="pt-3">
+              <a 
+                href="/easytrip.apk"
+                download
+                style={{
+                  background: '#000',
+                  color: '#fff',
+                  padding: '12px 25px',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  display: 'inline-block',
+                  fontWeight: 'bold'
+                }}
+              >
+                📱 Download EasyTrip Android App (.apk)
+              </a>
+            </div>
           </div>
 
           {/* Right Hero Interactive Showcase Card (Golaghat Transit Hubs) */}

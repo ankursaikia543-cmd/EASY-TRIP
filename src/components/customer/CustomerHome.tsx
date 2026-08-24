@@ -14,14 +14,17 @@ import {
   Zap,
   RotateCcw,
   Building2,
-  PhoneCall
+  PhoneCall,
+  Search
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useRide } from '../../context/RideContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { LocationPoint, VehicleType } from '../../types';
-import { POPULAR_LOCATIONS, GOLAGHAT_TOWNS, CONTACT_INFO } from '../../utils/initialData';
+import { POPULAR_LOCATIONS, GOLAGHAT_TOWNS, CONTACT_INFO, GOLAGHAT_GAON_PANCHAYATS } from '../../utils/initialData';
 import { InteractiveMap } from '../common/InteractiveMap';
+import { GoogleMapsEmbed } from '../common/GoogleMapsEmbed';
+import { GaonPanchayatSelector } from '../common/GaonPanchayatSelector';
 import { ActiveRideTracker } from './ActiveRideTracker';
 import { FareService } from '../../services/fareService';
 
@@ -29,6 +32,7 @@ export const CustomerHome: React.FC = () => {
   const { user } = useAuth();
   const { activeRide, requestRide, platformSettings, coupons } = useRide();
   const { t } = useLanguage();
+  const [mapEngine, setMapEngine] = useState<'google' | 'district'>('google');
 
   // Default Locations: Bokakhat (Main Office) & Golaghat Town Court Field
   const [pickup, setPickup] = useState<LocationPoint>({
@@ -56,6 +60,7 @@ export const CustomerHome: React.FC = () => {
   });
   const [isBooking, setIsBooking] = useState(false);
   const [showLocationSuggestions, setShowLocationSuggestions] = useState<'pickup' | 'dest' | null>(null);
+  const [isGPModalOpen, setIsGPModalOpen] = useState<boolean>(false);
 
   // If there's an ongoing active ride for this user, show the live tracking interface
   if (activeRide && (activeRide.status === 'searching' || activeRide.status === 'driver_assigned' || activeRide.status === 'arrived' || activeRide.status === 'in_progress' || activeRide.status === 'completed')) {
@@ -147,7 +152,7 @@ export const CustomerHome: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-display font-black text-slate-950 tracking-tight">
-                {t.greeting}, <span className="text-emerald-700">{user?.name ? user.name.split(' ')[0] : 'Passenger'}</span>
+                {t.greeting}, <span className="text-emerald-700">{user?.name || 'Passenger'}</span>
               </h1>
               <span className="text-[10px] uppercase font-display font-black tracking-wider px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-950 border border-orange-300">
                 ASSAM NETWORK
@@ -159,14 +164,15 @@ export const CustomerHome: React.FC = () => {
           </div>
         </div>
 
-        {/* Wallet & Main Office Bento Pills */}
+        {/* Wallet & Golaghat Transit Bento Pills */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="px-3.5 py-1.5 rounded-full bg-emerald-100/90 border border-emerald-300 text-emerald-950 text-xs font-display font-black flex items-center gap-2 shadow-2xs">
             <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
             <span>WALLET: <strong className="font-mono-num text-sm text-emerald-900 font-black">₹{user?.walletBalance || 0}</strong></span>
           </div>
-          <div className="px-3.5 py-1.5 rounded-full bg-orange-100/90 border border-orange-300 text-orange-950 text-xs font-display font-black tracking-wide uppercase">
-            🏢 MAIN HQ: BOKAKHAT
+          <div className="px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-display font-black tracking-wide uppercase flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <span>GOLAGHAT DISTRICT RIDES</span>
           </div>
         </div>
       </div>
@@ -265,6 +271,30 @@ export const CustomerHome: React.FC = () => {
                   placeholder="Search drop-off destination..."
                   className="text-xs font-bold text-slate-900 w-full outline-hidden"
                 />
+              </div>
+
+              {/* Map Selection Helper Tip & Gaon Panchayat Quick Action */}
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsGPModalOpen(true)}
+                  className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-700 to-orange-600 hover:from-emerald-800 hover:to-orange-700 active:scale-98 text-white rounded-xl font-display font-black text-xs flex items-center justify-between shadow-xs transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-orange-200" />
+                    <span>Select Gaon Panchayat (GP) & Village</span>
+                  </div>
+                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-sans font-bold">
+                    32+ GPs
+                  </span>
+                </button>
+
+                <div className="bg-emerald-50/80 rounded-xl p-2 border border-emerald-200 flex items-center justify-between text-[11px]">
+                  <div className="flex items-center gap-1.5 text-emerald-900 font-bold">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Tip: Map par kisi bhi town/pin par tap karke Pickup ya Drop set karein!</span>
+                  </div>
+                </div>
               </div>
 
               {/* Route Metric Bento Tag */}
@@ -479,17 +509,73 @@ export const CustomerHome: React.FC = () => {
         {/* Right Column: Bento Interactive Map & Bento Pulse Modules (7 Cols) */}
         <div className="lg:col-span-7 space-y-4 flex flex-col">
           
-          {/* Map Bento Box */}
+          {/* Map Bento Box with Live Google Maps / District Interactive Map */}
           <div className="bg-white rounded-[2.5rem] border border-emerald-200/80 p-2 shadow-xl overflow-hidden relative">
-            <InteractiveMap
-              pickup={pickup}
-              destination={destination}
-              vehicleType={selectedVehicle}
-              heightClass="h-[380px] sm:h-[480px]"
-            />
-            <div className="absolute bottom-5 left-5 bg-white/90 backdrop-blur-md px-3.5 py-1.5 rounded-full text-[11px] font-black text-slate-800 shadow-md border border-emerald-200 flex items-center gap-2">
+            {/* Top Map Engine Switcher: Google Map (Full) vs District GP Map */}
+            <div className="flex items-center justify-between p-2 mb-1 bg-slate-50/80 rounded-2xl border border-slate-200">
+              <div className="flex items-center gap-1.5 px-2 text-xs font-display font-black text-slate-800">
+                <span>🗺️ MAP ENGINE:</span>
+              </div>
+              <div className="flex items-center bg-white p-0.5 rounded-xl border border-slate-200 shadow-2xs text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setMapEngine('google')}
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    mapEngine === 'google'
+                      ? 'bg-emerald-600 text-white font-black shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  🌐 Google Maps (Full Live)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapEngine('district')}
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    mapEngine === 'district'
+                      ? 'bg-emerald-600 text-white font-black shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  📍 Golaghat District / GP
+                </button>
+              </div>
+            </div>
+
+            {mapEngine === 'google' ? (
+              <GoogleMapsEmbed
+                pickup={pickup}
+                destination={destination}
+                onSelectPickup={point => {
+                  setPickup(point);
+                  setPickupInput(point.address);
+                }}
+                onSelectDestination={point => {
+                  setDestination(point);
+                  setDestInput(point.address);
+                }}
+                heightClass="h-[420px] sm:h-[500px]"
+              />
+            ) : (
+              <InteractiveMap
+                pickup={pickup}
+                destination={destination}
+                onSelectPickup={point => {
+                  setPickup(point);
+                  setPickupInput(point.address);
+                }}
+                onSelectDestination={point => {
+                  setDestination(point);
+                  setDestInput(point.address);
+                }}
+                vehicleType={selectedVehicle}
+                heightClass="h-[420px] sm:h-[500px]"
+              />
+            )}
+            
+            <div className="absolute bottom-5 left-5 bg-white/90 backdrop-blur-md px-3.5 py-1.5 rounded-full text-[11px] font-black text-slate-800 shadow-md border border-emerald-200 flex items-center gap-2 pointer-events-none z-10">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>{distanceKm} km • ~{durationMin} mins (NH-37 / NH-39)</span>
+              <span>{distanceKm} km • ~{durationMin} mins (NH-37 / NH-39 Corridor)</span>
             </div>
           </div>
 
@@ -523,6 +609,23 @@ export const CustomerHome: React.FC = () => {
         </div>
 
       </div>
+
+      {/* Gaon Panchayat (GP) & Village Selection Drawer/Modal */}
+      <GaonPanchayatSelector
+        isOpen={isGPModalOpen}
+        onClose={() => setIsGPModalOpen(false)}
+        onSelectAsPickup={point => {
+          setPickup(point);
+          setPickupInput(point.address);
+        }}
+        onSelectAsDestination={point => {
+          setDestination(point);
+          setDestInput(point.address);
+        }}
+        currentPickup={pickup}
+        currentDestination={destination}
+      />
+
     </div>
   );
 };

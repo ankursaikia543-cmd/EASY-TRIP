@@ -27,6 +27,7 @@ import { DriverHome } from './components/driver/DriverHome';
 import { DriverEarnings } from './components/driver/DriverEarnings';
 import { DriverProfileKYC } from './components/driver/DriverProfileKYC';
 import { DriverRides } from './components/driver/DriverRides';
+import { DriverWelfare } from './components/driver/DriverWelfare';
 
 // Admin Components
 import { AdminDashboard } from './components/admin/AdminDashboard';
@@ -84,6 +85,7 @@ const MainContent: React.FC = () => {
     if (user?.role === 'driver') {
       if (currentView === 'home' || currentView === 'driver' || currentView === 'driver-home') return <DriverHome />;
       if (currentView === 'earnings' || currentView === 'driver-earnings') return <DriverEarnings />;
+      if (currentView === 'welfare' || currentView === 'driver-welfare' || currentView === 'epfo-esic') return <DriverWelfare />;
       if (currentView === 'profile' || currentView === 'kyc' || currentView === 'driver-kyc') return <DriverProfileKYC />;
       if (currentView === 'rides') return <DriverRides />;
       if (currentView === 'support') return <CustomerSupport />;

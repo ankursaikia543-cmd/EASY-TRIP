@@ -370,16 +370,32 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const commission = grossFare * (platformSettings.commissionRatePercent / 100);
       const net = grossFare - commission;
 
+      // Mandatory platform fee rule: ₹5 for Bike/Auto, ₹50 for Cab per customer booking
+      const mandatoryAdminFee = driverProfile.vehicleType === 'cab'
+        ? (platformSettings.driverAdminFeeCab || 50)
+        : (platformSettings.driverAdminFeeBikeAuto || 5);
+
+      const newDueAmount = (driverProfile.feeDueAmount || 0) + mandatoryAdminFee;
+
       const updatedDriver = {
         ...driverProfile,
         availabilityStatus: 'available' as const,
         totalRides: (driverProfile.totalRides || 0) + 1,
         todayEarnings: (driverProfile.todayEarnings || 0) + net,
         totalEarnings: (driverProfile.totalEarnings || 0) + net,
+        feeDueAmount: newDueAmount,
+        isFeePaid: newDueAmount === 0,
       };
 
       updateDriverProfile(updatedDriver);
       SupabaseService.syncDriver(updatedDriver);
+
+      // Trigger mandatory admin fee notification for driver
+      addNotification(
+        `Mandatory Admin Fee: ₹${mandatoryAdminFee}`,
+        `Please pay ₹${mandatoryAdminFee} (${driverProfile.vehicleType.toUpperCase()}) to Admin via Google Pay QR to keep your driver app active.`,
+        'payment'
+      );
     }
 
     // Trigger celebration confetti

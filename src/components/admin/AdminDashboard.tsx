@@ -42,6 +42,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { Coupon, VehicleType, ComplaintTicket, Ride, UserProfile } from '../../types';
 import { InteractiveMap } from '../common/InteractiveMap';
+import { WebsiteMaintenanceTab } from './WebsiteMaintenanceTab';
 import { SupabaseService, SyncLog } from '../../supabase/supabaseService';
 import { SUPABASE_PROJECT_ID, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../supabase/config';
 
@@ -57,10 +58,17 @@ export const AdminDashboard: React.FC = () => {
     toggleCoupon, 
     resolveComplaint 
   } = useRide();
-  const { allUsers, adminApproveDriver, adminRejectDriver, isAdminSlotClaimed, masterAdminAccount } = useAuth();
+  const { 
+    allUsers, 
+    adminApproveDriver, 
+    adminRejectDriver, 
+    adminToggleDriverFeeStatus,
+    isAdminSlotClaimed, 
+    masterAdminAccount 
+  } = useAuth();
   const { addNotification } = useNotifications();
 
-  const [activeTab, setActiveTab] = useState<'bookings' | 'customers' | 'analytics' | 'drivers' | 'pricing' | 'coupons' | 'complaints' | 'supabase' | 'admin_slot'>('bookings');
+  const [activeTab, setActiveTab] = useState<'maintenance' | 'bookings' | 'customers' | 'analytics' | 'drivers' | 'pricing' | 'coupons' | 'complaints' | 'supabase' | 'admin_slot'>('bookings');
 
   // Bookings Ledger Search & Filters State
   const [bookingSearch, setBookingSearch] = useState('');
@@ -378,6 +386,7 @@ export const AdminDashboard: React.FC = () => {
       {/* Navigation Bento Pills Bar */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar p-1.5 bg-emerald-50/70 rounded-full border border-emerald-200">
         {[
+          { id: 'maintenance', label: '🛠️ WEBSITE MAINTENANCE & CONTROL' },
           { id: 'bookings', label: `📋 ALL BOOKINGS (${allRides.length})` },
           { id: 'customers', label: `👥 CUSTOMERS (${customerUsers.length})` },
           { id: 'analytics', label: '📊 OVERVIEW & KPIS' },
@@ -401,6 +410,11 @@ export const AdminDashboard: React.FC = () => {
           </button>
         ))}
       </div>
+
+      {/* TAB 0: WEBSITE MAINTENANCE & MASTER CONTROL */}
+      {activeTab === 'maintenance' && (
+        <WebsiteMaintenanceTab />
+      )}
 
       {/* TAB 1: ANALYTICS OVERVIEW */}
       {activeTab === 'analytics' && (
@@ -510,84 +524,133 @@ export const AdminDashboard: React.FC = () => {
                   <th className="pb-3">Vehicle & Plate</th>
                   <th className="pb-3">Driving License</th>
                   <th className="pb-3">Status</th>
+                  <th className="pb-3">Mandatory Admin Fee</th>
                   <th className="pb-3">Rating</th>
-                  <th className="pb-3 text-right">KYC Action</th>
+                  <th className="pb-3 text-right">Actions & Fee Control</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {allDrivers.map(drv => (
-                  <tr key={drv.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3.5">
-                      <div className="flex items-center gap-2.5">
-                        <img
-                          src={drv.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
-                          alt={drv.name}
-                          className="w-9 h-9 rounded-xl object-cover border border-slate-200"
-                        />
-                        <div>
-                          <div className="font-bold text-slate-900">{drv.name}</div>
-                          <span className="text-[11px] text-slate-500 font-mono">{drv.phone}</span>
+                {allDrivers.map(drv => {
+                  const feeDue = drv.feeDueAmount || 0;
+                  const isLocked = feeDue > 0 || (drv.isFeePaid === false && (drv.totalRides || 0) > 0);
+                  const standardFee = drv.vehicleType === 'cab' ? 50 : 5;
+
+                  return (
+                    <tr key={drv.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={drv.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                            alt={drv.name}
+                            className="w-9 h-9 rounded-xl object-cover border border-slate-200"
+                          />
+                          <div>
+                            <div className="font-bold text-slate-900">{drv.name}</div>
+                            <span className="text-[11px] text-slate-500 font-mono">{drv.phone}</span>
+                          </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="py-3.5">
-                      <div className="font-bold text-slate-800 uppercase">
-                        {drv.vehicleType} • {drv.vehicleBrand} {drv.vehicleModel}
-                      </div>
-                      <span className="font-mono text-[10px] font-black text-slate-700 bg-yellow-100 px-1.5 py-0.5 rounded border border-yellow-300">
-                        {drv.vehicleNumber}
-                      </span>
-                    </td>
-
-                    <td className="py-3.5 font-mono text-slate-700">
-                      {drv.licenseNumber}
-                    </td>
-
-                    <td className="py-3.5">
-                      <span className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-md text-[10px] ${
-                        drv.approvalStatus === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                        drv.approvalStatus === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                        'bg-rose-50 text-rose-700 border border-rose-200'
-                      }`}>
-                        {drv.approvalStatus === 'approved' && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
-                        {drv.approvalStatus === 'pending' && <Clock className="w-3 h-3 text-amber-600" />}
-                        <span className="uppercase">{drv.approvalStatus}</span>
-                      </span>
-                    </td>
-
-                    <td className="py-3.5 font-bold text-slate-800">
-                      ⭐ {drv.rating || 4.88} ({drv.totalRides || 0})
-                    </td>
-
-                    <td className="py-3.5 text-right">
-                      {drv.approvalStatus === 'pending' ? (
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              adminApproveDriver(drv.id);
-                              addNotification('Driver Approved', `${drv.name} has been verified and authorized for duty.`, 'system');
-                            }}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-xs"
-                          >
-                            <Check className="w-3.5 h-3.5" /> Approve
-                          </button>
-                          <button
-                            onClick={() => {
-                              adminRejectDriver(drv.id);
-                              addNotification('Driver Rejected', `${drv.name}'s KYC was declined.`, 'system');
-                            }}
-                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs border border-rose-200"
-                          >
-                            Reject
-                          </button>
+                      <td className="py-3.5">
+                        <div className="font-bold text-slate-800 uppercase">
+                          {drv.vehicleType} • {drv.vehicleBrand} {drv.vehicleModel}
                         </div>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 font-medium">Verified Active</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                        <span className="font-mono text-[10px] font-black text-slate-700 bg-yellow-100 px-1.5 py-0.5 rounded border border-yellow-300">
+                          {drv.vehicleNumber}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 font-mono text-slate-700">
+                        {drv.licenseNumber}
+                      </td>
+
+                      <td className="py-3.5">
+                        <span className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-md text-[10px] ${
+                          drv.approvalStatus === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                          drv.approvalStatus === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                          'bg-rose-50 text-rose-700 border border-rose-200'
+                        }`}>
+                          {drv.approvalStatus === 'approved' && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                          {drv.approvalStatus === 'pending' && <Clock className="w-3 h-3 text-amber-600" />}
+                          <span className="uppercase">{drv.approvalStatus}</span>
+                        </span>
+                      </td>
+
+                      {/* Mandatory Admin Fee Status */}
+                      <td className="py-3.5">
+                        <div className="space-y-1">
+                          <span className={`inline-flex items-center gap-1 font-display font-black px-2 py-0.5 rounded-md text-[10px] uppercase ${
+                            isLocked
+                              ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                              : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          }`}>
+                            {isLocked ? `₹${feeDue || standardFee} Due (App Locked)` : 'Paid / Active'}
+                          </span>
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            Total Paid: ₹{drv.totalFeePaidToAdmin || 0}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 font-bold text-slate-800">
+                        ⭐ {drv.rating || 4.88} ({drv.totalRides || 0})
+                      </td>
+
+                      <td className="py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          {drv.approvalStatus === 'pending' ? (
+                            <>
+                              <button
+                                onClick={() => {
+                                  adminApproveDriver(drv.id);
+                                  addNotification('Driver Approved', `${drv.name} has been verified and authorized for duty.`, 'system');
+                                }}
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-xs cursor-pointer"
+                              >
+                                <Check className="w-3.5 h-3.5" /> Approve
+                              </button>
+                              <button
+                                onClick={() => {
+                                  adminRejectDriver(drv.id);
+                                  addNotification('Driver Rejected', `${drv.name}'s KYC was declined.`, 'system');
+                                }}
+                                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs border border-rose-200 cursor-pointer"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {isLocked ? (
+                                <button
+                                  onClick={() => {
+                                    adminToggleDriverFeeStatus(drv.id, true, 0);
+                                    addNotification('Fee Cleared', `Unlocked driver app for ${drv.name}. Fee marked cleared.`, 'system');
+                                  }}
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
+                                  title="Mark fee paid and unlock driver application"
+                                >
+                                  <CheckCircle2 className="w-3 h-3" /> Unlock App
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    adminToggleDriverFeeStatus(drv.id, false, standardFee);
+                                    addNotification('Fee Lock Imposed', `Imposed ₹${standardFee} mandatory fee on ${drv.name}.`, 'system');
+                                  }}
+                                  className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-[11px] border border-rose-200 cursor-pointer"
+                                  title="Impose fee due and lock driver application"
+                                >
+                                  Impose Fee (₹{standardFee})
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

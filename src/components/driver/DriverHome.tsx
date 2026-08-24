@@ -15,7 +15,11 @@ import {
   ShieldCheck, 
   RotateCcw,
   IndianRupee,
-  Volume2
+  Volume2,
+  Lock,
+  QrCode,
+  AlertTriangle,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useRide } from '../../context/RideContext';
@@ -23,6 +27,8 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { InteractiveMap } from '../common/InteractiveMap';
 import { ChatModal } from '../common/ChatModal';
+import { AdminUpiQrCard } from './AdminUpiQrCard';
+import { DriverFeeModal } from './DriverFeeModal';
 
 export const DriverHome: React.FC = () => {
   const { driverProfile, updateDriverProfile } = useAuth();
@@ -33,7 +39,8 @@ export const DriverHome: React.FC = () => {
     driverRejectRide,
     driverArrivedAtPickup,
     driverStartRideWithOtp,
-    driverCompleteRide
+    driverCompleteRide,
+    platformSettings
   } = useRide();
   const { t } = useLanguage();
   const { addNotification } = useNotifications();
@@ -42,17 +49,42 @@ export const DriverHome: React.FC = () => {
   const [otpError, setOtpError] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [countdownSeconds, setCountdownSeconds] = useState(25);
+  const [showFeeModal, setShowFeeModal] = useState(false);
+  const [showQrCard, setShowQrCard] = useState(true);
 
   const isOnline = driverProfile?.onlineStatus === 'online';
   const isApproved = driverProfile?.approvalStatus === 'approved';
 
-  // Toggle Driver Online / Offline
+  // Fee Rules: ₹5 for Bike/Auto, ₹50 for Cab per customer booking
+  const feeRate = driverProfile?.vehicleType === 'cab' 
+    ? (platformSettings.driverAdminFeeCab || 50) 
+    : (platformSettings.driverAdminFeeBikeAuto || 5);
+  
+  const dueAmount = driverProfile?.feeDueAmount !== undefined 
+    ? driverProfile.feeDueAmount 
+    : 0;
+
+  // App is locked if driver has unpaid fee dues or is explicitly flagged unpaid
+  const isFeeLocked = dueAmount > 0 || (driverProfile?.isFeePaid === false && (driverProfile?.totalRides || 0) > 0);
+
+  // Toggle Driver Online / Offline with Mandatory Fee Enforcement
   const toggleOnline = () => {
     if (!driverProfile) return;
     if (!isApproved) {
       addNotification('KYC Verification Pending', 'Your account must be approved by admin before going online.', 'system');
       return;
     }
+
+    if (isFeeLocked) {
+      setShowFeeModal(true);
+      addNotification(
+        'Driver App Locked - Fee Pending',
+        `Mandatory Admin platform fee of ₹${dueAmount || feeRate} is pending. Please pay via Admin Google Pay QR Code to unlock your app.`,
+        'payment'
+      );
+      return;
+    }
+
     const nextStatus = isOnline ? 'offline' : 'online';
     updateDriverProfile({ onlineStatus: nextStatus });
     addNotification(
@@ -61,6 +93,14 @@ export const DriverHome: React.FC = () => {
       'system'
     );
   };
+
+  // Auto take driver offline if fee gets locked
+  useEffect(() => {
+    if (isFeeLocked && isOnline) {
+      updateDriverProfile({ onlineStatus: 'offline' });
+      addNotification('Duty Suspended', `Please pay pending admin fee of ₹${dueAmount || feeRate} to resume duty.`, 'payment');
+    }
+  }, [isFeeLocked]);
 
   // Incoming Request Countdown Timer
   useEffect(() => {
@@ -129,8 +169,23 @@ export const DriverHome: React.FC = () => {
           </div>
         </div>
 
-        {/* Online / Offline Toggle Button */}
-        <div className="flex items-center gap-3">
+        {/* Online / Offline Toggle Button & Pay Admin Fee */}
+        <div className="flex flex-wrap items-center gap-3">
+          
+          {/* Quick Pay Admin Fee Button */}
+          <button
+            onClick={() => setShowFeeModal(true)}
+            className={`px-4 py-3 rounded-2xl font-display font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all shadow-sm cursor-pointer border ${
+              isFeeLocked
+                ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700 animate-bounce'
+                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300'
+            }`}
+          >
+            <QrCode className="w-4 h-4 text-orange-500" />
+            <span>PAY ADMIN FEE ({driverProfile?.vehicleType === 'cab' ? '₹50' : '₹5'})</span>
+            {isFeeLocked && <span className="bg-white text-rose-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">DUE</span>}
+          </button>
+
           <div className="text-right hidden sm:block">
             <div className="text-xs font-display font-black text-slate-950">
               {isOnline ? 'ACTIVE ON DUTY' : 'CURRENTLY OFFLINE'}
@@ -143,16 +198,48 @@ export const DriverHome: React.FC = () => {
           <button
             onClick={toggleOnline}
             className={`px-6 py-3 rounded-2xl font-display font-black text-xs uppercase tracking-wider flex items-center gap-2.5 transition-all shadow-md cursor-pointer ${
-              isOnline
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/25'
-                : 'bg-gradient-to-r from-orange-500 to-emerald-600 hover:from-orange-600 hover:to-emerald-700 text-white shadow-orange-500/25'
+              isFeeLocked
+                ? 'bg-slate-400 hover:bg-slate-500 text-white opacity-90 cursor-not-allowed'
+                : isOnline
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/25'
+                  : 'bg-gradient-to-r from-orange-500 to-emerald-600 hover:from-orange-600 hover:to-emerald-700 text-white shadow-orange-500/25'
             }`}
           >
-            <Power className="w-4 h-4" />
-            <span>{isOnline ? 'GO OFFLINE' : 'GO ONLINE'}</span>
+            {isFeeLocked ? <Lock className="w-4 h-4" /> : <Power className="w-4 h-4" />}
+            <span>{isFeeLocked ? 'APP LOCKED' : isOnline ? 'GO OFFLINE' : 'GO ONLINE'}</span>
           </button>
         </div>
       </div>
+
+      {/* MANDATORY ADMIN FEE LOCK BANNER */}
+      {isFeeLocked && (
+        <div className="p-5 bg-gradient-to-r from-rose-500 via-rose-600 to-orange-600 text-white rounded-3xl shadow-lg border-2 border-rose-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in slide-in-from-top-2">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center shrink-0 mt-0.5">
+              <Lock className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-white text-rose-700 font-display">
+                  SERVICE SUSPENDED
+                </span>
+                <h3 className="font-display font-black text-base">Mandatory Platform Fee Pending</h3>
+              </div>
+              <p className="text-xs text-rose-100 mt-1 leading-relaxed">
+                As per platform policy, {driverProfile?.vehicleType === 'cab' ? 'cab drivers must pay ₹50 per booking' : 'bike and auto drivers must pay ₹5 regular fee'} to Admin. Your driver app cannot receive rides until cleared.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowFeeModal(true)}
+            className="px-6 py-3 bg-white hover:bg-rose-50 text-rose-700 font-display font-black text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all shrink-0 cursor-pointer flex items-center justify-center gap-2"
+          >
+            <QrCode className="w-4 h-4 text-orange-600" />
+            <span>SCAN ADMIN QR & UNLOCK</span>
+          </button>
+        </div>
+      )}
 
       {/* KYC Warning if pending */}
       {!isApproved && (
@@ -324,8 +411,38 @@ export const DriverHome: React.FC = () => {
 
       </div>
 
+      {/* PERMANENT FIXED ADMIN GOOGLE PAY UPI QR CODE SECTION FOR REGULAR DRIVERS */}
+      <div className="pt-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-display font-black text-xl text-slate-950 tracking-tight flex items-center gap-2">
+              <span className="p-1 rounded-lg bg-orange-100 text-orange-600">
+                <QrCode className="w-5 h-5" />
+              </span>
+              <span>Admin Platform Fee Counter & Google Pay QR</span>
+            </h2>
+            <p className="text-xs text-slate-600 mt-0.5">
+              Permanent QR code for driver partner mandatory payments (₹5 for Bike/Auto, ₹50 for Cab).
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-600 hidden sm:inline">Status:</span>
+            <span className={`px-3 py-1 rounded-full text-xs font-display font-black uppercase tracking-wider ${
+              isFeeLocked 
+                ? 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse'
+                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+            }`}>
+              {isFeeLocked ? `DUE: ₹${dueAmount || feeRate}` : 'FEE CLEARED (ACTIVE)'}
+            </span>
+          </div>
+        </div>
+
+        <AdminUpiQrCard customAmount={dueAmount > 0 ? dueAmount : feeRate} />
+      </div>
+
       {/* INCOMING RIDE REQUEST POP-UP MODAL (25s Audio-Visual Alert) */}
-      {incomingDriverRequest && (
+      {incomingDriverRequest && !isFeeLocked && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in zoom-in-95">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border-2 border-emerald-500 space-y-5 relative overflow-hidden">
             
@@ -397,6 +514,13 @@ export const DriverHome: React.FC = () => {
 
       {/* In-app Chat Modal */}
       <ChatModal isOpen={showChat} onClose={() => setShowChat(false)} />
+
+      {/* Mandatory Driver Admin Fee Modal */}
+      <DriverFeeModal 
+        isOpen={showFeeModal} 
+        onClose={() => setShowFeeModal(false)} 
+        reason={isFeeLocked ? `Duty is locked due to pending mandatory platform fee of ₹${dueAmount || feeRate}. Scan Admin QR Code to resume service.` : undefined}
+      />
 
     </div>
   );
