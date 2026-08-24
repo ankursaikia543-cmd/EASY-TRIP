@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "UserProfile": {
+      "collection": "users",
+      "fields": {
+        "id": { "type": "string", "description": "Unique Firebase Auth UID" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "photoURL": { "type": "string", "optional": true },
+        "role": { "type": "string", "enum": ["customer", "driver", "admin"] },
+        "status": { "type": "string", "enum": ["active", "blocked"] },
+        "walletBalance": { "type": "number" },
+        "emergencyContact": { "type": "string", "optional": true },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "DriverProfile": {
+      "collection": "drivers",
+      "fields": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string", "optional": true },
+        "vehicleType": { "type": "string", "enum": ["bike", "auto", "cab"] },
+        "vehicleBrand": { "type": "string" },
+        "vehicleModel": { "type": "string" },
+        "vehicleColor": { "type": "string" },
+        "vehicleNumber": { "type": "string" },
+        "licenseNumber": { "type": "string" },
+        "documents": { "type": "map" },
+        "approvalStatus": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "onlineStatus": { "type": "string", "enum": ["online", "offline"] },
+        "availabilityStatus": { "type": "string", "enum": ["available", "busy"] },
+        "currentLocation": { "type": "map" },
+        "rating": { "type": "number" },
+        "totalRides": { "type": "number" },
+        "todayEarnings": { "type": "number" },
+        "totalEarnings": { "type": "number" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Ride": {
+      "collection": "rides",
+      "fields": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "driverId": { "type": "string", "optional": true },
+        "driverName": { "type": "string", "optional": true },
+        "vehicleType": { "type": "string", "enum": ["bike", "auto", "cab"] },
+        "otp": { "type": "string" },
+        "pickup": { "type": "map" },
+        "destination": { "type": "map" },
+        "distanceKm": { "type": "number" },
+        "estimatedDurationMin": { "type": "number" },
+        "estimatedFare": { "type": "number" },
+        "finalFare": { "type": "number" },
+        "status": { "type": "string", "enum": ["searching", "driver_assigned", "arrived", "in_progress", "completed", "cancelled"] },
+        "paymentMethod": { "type": "string", "enum": ["cash", "upi", "wallet"] },
+        "paymentStatus": { "type": "string", "enum": ["pending", "paid", "refunded"] },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Payment": {
+      "collection": "payments",
+      "fields": {
+        "id": { "type": "string" },
+        "rideId": { "type": "string" },
+        "customerId": { "type": "string" },
+        "driverId": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "status": { "type": "string" },
+        "transactionId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Coupon": {
+      "collection": "coupons",
+      "fields": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "description": { "type": "string" },
+        "discountType": { "type": "string" },
+        "discountValue": { "type": "number" },
+        "minimumFare": { "type": "number" },
+        "maximumDiscount": { "type": "number" },
+        "expiryDate": { "type": "string" },
+        "active": { "type": "boolean" },
+        "usageCount": { "type": "number" }
+      }
+    },
+    "Complaint": {
+      "collection": "complaints",
+      "fields": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userRole": { "type": "string" },
+        "rideId": { "type": "string", "optional": true },
+        "subject": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "in_progress", "resolved"] },
+        "adminResponse": { "type": "string", "optional": true },
+        "aiSummary": { "type": "string", "optional": true },
+        "createdAt": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "EASY TRIP",
+  "description": "Local ride-booking platform for Bikes, Autos, and Cabs with Customer, Driver, and Admin portals, live tracking, UPI payments, and AI support.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
