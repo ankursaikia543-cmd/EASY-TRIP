@@ -11,7 +11,7 @@ interface AuthContextType {
   currentRole: UserRole | 'guest';
   isAuthenticated: boolean;
   isLoading: boolean;
-  loginAs: (role: UserRole, email?: string, name?: string) => Promise<void>;
+  loginAs: (role: UserRole, identifier?: string, name?: string, phone?: string) => Promise<void>;
   loginAsRole: (role: UserRole) => void;
   register: (name: string, email: string, phone: string, role: UserRole, driverData?: Partial<DriverProfile>) => Promise<void>;
   logout: () => Promise<void>;
@@ -128,45 +128,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [allUsers]);
 
-  const loginAs = async (role: UserRole, email?: string, name?: string) => {
+  const loginAs = async (role: UserRole, identifier?: string, name?: string, phone?: string) => {
     setIsLoading(true);
     try {
-      let targetUser = allUsers.find(u => u.role === role);
-      if (email) {
-        const found = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-        if (found) targetUser = found;
+      let targetUser: UserProfile | undefined = undefined;
+      const cleanInputPhone = (phone || identifier || '').replace(/\D/g, '');
+
+      // 1. Check match by exact phone number
+      if (cleanInputPhone.length >= 10) {
+        targetUser = allUsers.find(u => {
+          const uClean = (u.phone || '').replace(/\D/g, '');
+          return uClean.slice(-10) === cleanInputPhone.slice(-10);
+        });
+      }
+
+      // 2. Check match by email or structured user ID
+      if (!targetUser && identifier) {
+        targetUser = allUsers.find(u => 
+          u.email.toLowerCase() === identifier.toLowerCase() ||
+          u.id.toLowerCase() === identifier.toLowerCase()
+        );
+      }
+
+      // 3. If explicit role switch without identifier
+      if (!targetUser && !identifier && !phone) {
+        targetUser = allUsers.find(u => u.role === role);
       }
 
       if (!targetUser) {
-        // Create new user with the exact name provided
+        // Create new user with the exact name and phone provided
         const finalName = name && name.trim() ? name.trim() : (role === 'admin' ? 'EASY TRIP Admin' : role === 'driver' ? 'Driver Partner' : 'Customer');
+        const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+        const generatedUserId = role === 'customer' 
+          ? `ET-CUST-${randomSuffix}` 
+          : role === 'driver' 
+          ? `ET-DRV-${randomSuffix}` 
+          : `ET-ADM-${randomSuffix}`;
+
+        const formattedPhone = cleanInputPhone.length >= 10 ? `+91 ${cleanInputPhone.slice(-10)}` : (phone || '+91 98765 00000');
+
         const newUser: UserProfile = {
-          id: `user-${role}-${Date.now()}`,
+          id: generatedUserId,
           name: finalName,
-          email: email || `${role}@easytrip.in`,
-          phone: '+91 98765 00000',
+          email: identifier && identifier.includes('@') ? identifier : `${cleanInputPhone || randomSuffix}@easytrip.in`,
+          phone: formattedPhone,
           role,
           status: 'active',
-          walletBalance: role === 'customer' ? 300 : 0,
+          walletBalance: role === 'customer' ? 200 : 0,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
-        setAllUsers(prev => [...prev, newUser]);
+        setAllUsers(prev => [newUser, ...prev]);
         targetUser = newUser;
       } else if (name && name.trim() && targetUser.name !== name.trim()) {
-        // If user logged in specifying an explicit name, update and personalize their profile name
+        // If user logged in specifying a personalized name, update their profile name
         const updatedUser: UserProfile = { ...targetUser, name: name.trim(), updatedAt: new Date().toISOString() };
         setAllUsers(prev => prev.map(u => u.id === targetUser!.id ? updatedUser : u));
         targetUser = updatedUser;
       }
 
       setUser(targetUser);
+      localStorage.setItem('easytrip_current_user', JSON.stringify(targetUser));
 
-      if (role === 'driver') {
-        let drv = allDrivers.find(d => d.userId === targetUser!.id);
+      if (targetUser.role === 'driver' || role === 'driver') {
+        let drv = allDrivers.find(d => d.userId === targetUser!.id || d.phone.replace(/\D/g, '').slice(-10) === cleanInputPhone.slice(-10));
         if (!drv) {
           drv = {
-            id: `drv-${Date.now()}`,
+            id: `DRV-${Date.now().toString().slice(-5)}`,
             userId: targetUser.id,
             name: targetUser.name,
             phone: targetUser.phone,
@@ -198,12 +226,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             platformCommissionRate: 0.15,
             createdAt: new Date().toISOString(),
           };
-          setAllDrivers(prev => [...prev, drv!]);
+          setAllDrivers(prev => [drv!, ...prev]);
         } else if (name && name.trim() && drv.name !== name.trim()) {
           drv = { ...drv, name: name.trim() };
           setAllDrivers(prev => prev.map(d => d.id === drv!.id ? drv! : d));
         }
         setDriverProfile(drv);
+        localStorage.setItem('easytrip_current_driver', JSON.stringify(drv));
       }
     } finally {
       setIsLoading(false);
@@ -219,6 +248,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     setIsLoading(true);
     try {
+      const trimmedName = name.trim();
+      const cleanPhone = phone.replace(/\D/g, '');
+      const formattedPhone = cleanPhone.length >= 10 ? `+91 ${cleanPhone.slice(-10)}` : phone;
+
       // Auto-generate official structured Easy Trip ID
       const randomSuffix = Math.floor(10000 + Math.random() * 90000);
       const generatedUserId = role === 'customer' 
@@ -229,9 +262,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const newUser: UserProfile = {
         id: generatedUserId,
-        name,
-        email,
-        phone,
+        name: trimmedName,
+        email: email.trim() || `${cleanPhone}@easytrip.in`,
+        phone: formattedPhone,
         role,
         status: 'active',
         walletBalance: role === 'customer' ? 200 : 0,
@@ -239,17 +272,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedAt: new Date().toISOString(),
       };
 
-      setAllUsers(prev => [...prev, newUser]);
+      // Filter out duplicate phone and prepend new registered user
+      setAllUsers(prev => [newUser, ...prev.filter(u => u.phone.replace(/\D/g, '').slice(-10) !== cleanPhone.slice(-10))]);
       setUser(newUser);
+      localStorage.setItem('easytrip_current_user', JSON.stringify(newUser));
 
       if (role === 'driver') {
         const generatedDriverId = `DRV-${randomSuffix}`;
         const newDriver: DriverProfile = {
           id: generatedDriverId,
           userId: newUser.id,
-          name,
-          phone,
-          email,
+          name: trimmedName,
+          phone: formattedPhone,
+          email: newUser.email,
           photoURL: driverData?.photoURL || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
           vehicleType: driverData?.vehicleType || 'bike',
           vehicleBrand: driverData?.vehicleBrand || 'Hero',
@@ -283,8 +318,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           createdAt: new Date().toISOString(),
         };
 
-        setAllDrivers(prev => [...prev, newDriver]);
+        setAllDrivers(prev => [newDriver, ...prev.filter(d => d.phone.replace(/\D/g, '').slice(-10) !== cleanPhone.slice(-10))]);
         setDriverProfile(newDriver);
+        localStorage.setItem('easytrip_current_driver', JSON.stringify(newDriver));
         SupabaseService.syncDriver(newDriver);
       }
     } finally {

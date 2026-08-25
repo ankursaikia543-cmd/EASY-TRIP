@@ -1,42 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Navigation, 
   MapPin, 
   Car, 
   Compass, 
-  Tag, 
   Clock, 
   Users, 
   ArrowRight, 
   Sparkles, 
   Check, 
-  AlertCircle,
-  Zap,
-  RotateCcw,
-  Building2,
-  PhoneCall,
-  Search
+  Zap, 
+  RotateCcw, 
+  Building2, 
+  PhoneCall, 
+  Search,
+  CheckCircle2,
+  Filter,
+  X,
+  Plane,
+  Train,
+  Hospital,
+  GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useRide } from '../../context/RideContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { LocationPoint, VehicleType } from '../../types';
-import { POPULAR_LOCATIONS, GOLAGHAT_TOWNS, CONTACT_INFO, GOLAGHAT_GAON_PANCHAYATS } from '../../utils/initialData';
+import { CONTACT_INFO } from '../../utils/initialData';
+import { 
+  ALL_ASSAM_LOCATIONS, 
+  LocationItem, 
+  searchLocations, 
+  findLocationByQuery 
+} from '../../utils/locationDatabase';
 import { InteractiveMap } from '../common/InteractiveMap';
 import { GoogleMapsEmbed } from '../common/GoogleMapsEmbed';
 import { GaonPanchayatSelector } from '../common/GaonPanchayatSelector';
+import { LocationSearchInput } from '../common/LocationSearchInput';
 import { ActiveRideTracker } from './ActiveRideTracker';
 import { FareService } from '../../services/fareService';
 
 export const CustomerHome: React.FC = () => {
   const { user } = useAuth();
-  const { activeRide, requestRide, platformSettings, coupons } = useRide();
+  const { activeRide, requestRide, platformSettings } = useRide();
   const { t } = useLanguage();
   const [mapEngine, setMapEngine] = useState<'google' | 'district'>('google');
 
   // Default Locations: Bokakhat (Main Office) & Golaghat Town Court Field
   const [pickup, setPickup] = useState<LocationPoint>({
-    address: 'Bokakhat Main Chariali (Main Office Area), Assam',
+    address: 'Bokakhat Main Chariali, NRL Gate, NH-37, Golaghat, Assam',
     lat: 26.5925,
     lng: 93.5937,
     city: 'Bokakhat',
@@ -52,15 +64,10 @@ export const CustomerHome: React.FC = () => {
   const [pickupInput, setPickupInput] = useState(pickup.address);
   const [destInput, setDestInput] = useState(destination.address);
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('auto');
-  const [couponCode, setCouponCode] = useState('GOLAGHAT50');
-  const [appliedCoupon, setAppliedCoupon] = useState<string | null>('GOLAGHAT50');
-  const [couponMessage, setCouponMessage] = useState<{ text: string; success: boolean } | null>({
-    text: 'GOLAGHAT50 applied! Flat ₹50 OFF',
-    success: true,
-  });
   const [isBooking, setIsBooking] = useState(false);
-  const [showLocationSuggestions, setShowLocationSuggestions] = useState<'pickup' | 'dest' | null>(null);
   const [isGPModalOpen, setIsGPModalOpen] = useState<boolean>(false);
+
+  const destInputRef = useRef<HTMLInputElement>(null);
 
   // If there's an ongoing active ride for this user, show the live tracking interface
   if (activeRide && (activeRide.status === 'searching' || activeRide.status === 'driver_assigned' || activeRide.status === 'arrived' || activeRide.status === 'in_progress' || activeRide.status === 'completed')) {
@@ -70,71 +77,76 @@ export const CustomerHome: React.FC = () => {
   // Calculate live estimates
   const distanceKm = FareService.calculateDistanceKm(pickup, destination);
   const durationMin = FareService.estimateDurationMin(distanceKm, selectedVehicle);
-  const activeCouponObj = appliedCoupon ? coupons.find(c => c.code.toUpperCase() === appliedCoupon.toUpperCase() && c.active) : null;
-  const currentFareBreakdown = FareService.calculateFare(selectedVehicle, distanceKm, durationMin, platformSettings, activeCouponObj);
+  const currentFareBreakdown = FareService.calculateFare(selectedVehicle, distanceKm, durationMin, platformSettings);
 
-  const handleApplyCoupon = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!couponCode.trim()) return;
+  const bikeFare = FareService.calculateFare('bike', distanceKm, FareService.estimateDurationMin(distanceKm, 'bike'), platformSettings);
+  const autoFare = FareService.calculateFare('auto', distanceKm, FareService.estimateDurationMin(distanceKm, 'auto'), platformSettings);
+  const cabFare = FareService.calculateFare('cab', distanceKm, FareService.estimateDurationMin(distanceKm, 'cab'), platformSettings);
 
-    const matched = coupons.find(c => c.code.toUpperCase() === couponCode.trim().toUpperCase() && c.active);
-    if (!matched) {
-      setCouponMessage({ text: 'Invalid promo code for Golaghat district', success: false });
-      return;
-    }
-
-    if (currentFareBreakdown.subtotal < matched.minimumFare) {
-      setCouponMessage({ 
-        text: `Coupon valid on minimum fare of ₹${matched.minimumFare}`, 
-        success: false 
+  const handlePickupChange = (value: string, locationItem?: LocationItem) => {
+    setPickupInput(value);
+    if (locationItem) {
+      setPickup({
+        address: locationItem.address,
+        lat: locationItem.lat,
+        lng: locationItem.lng,
+        city: locationItem.city
       });
-      return;
+    } else {
+      const coords = findLocationByQuery(value);
+      if (coords) {
+        setPickup({ address: value, lat: coords.lat, lng: coords.lng, city: coords.city });
+      } else {
+        setPickup(prev => ({ ...prev, address: value }));
+      }
     }
-
-    setAppliedCoupon(matched.code);
-    setCouponMessage({ 
-      text: `${matched.code} applied! Saved ₹${matched.discountType === 'flat' ? matched.discountValue : `${matched.discountValue}%`}`, 
-      success: true 
-    });
   };
 
-  const handleSelectPopularLoc = (loc: typeof POPULAR_LOCATIONS[0]) => {
-    if (showLocationSuggestions === 'pickup') {
-      setPickup({ address: loc.address, lat: loc.lat, lng: loc.lng });
-      setPickupInput(loc.address);
+  const handleDestChange = (value: string, locationItem?: LocationItem) => {
+    setDestInput(value);
+    if (locationItem) {
+      setDestination({
+        address: locationItem.address,
+        lat: locationItem.lat,
+        lng: locationItem.lng,
+        city: locationItem.city
+      });
     } else {
-      setDestination({ address: loc.address, lat: loc.lat, lng: loc.lng });
-      setDestInput(loc.address);
+      const coords = findLocationByQuery(value);
+      if (coords) {
+        setDestination({ address: value, lat: coords.lat, lng: coords.lng, city: coords.city });
+      } else {
+        setDestination(prev => ({ ...prev, address: value }));
+      }
     }
-    setShowLocationSuggestions(null);
   };
 
   const handleSelectTownPair = (pTown: string, dTown: string) => {
-    const pObj = GOLAGHAT_TOWNS.find(t => t.name === pTown) || GOLAGHAT_TOWNS[0];
-    const dObj = GOLAGHAT_TOWNS.find(t => t.name === dTown) || GOLAGHAT_TOWNS[4];
+    const pObj = findLocationByQuery(pTown) || ALL_ASSAM_LOCATIONS[0];
+    const dObj = findLocationByQuery(dTown) || ALL_ASSAM_LOCATIONS[4];
 
     setPickup({
-      address: `${pObj.name} (${pObj.landmark}), Assam`,
+      address: pObj.address,
       lat: pObj.lat,
       lng: pObj.lng,
-      city: pObj.name,
+      city: pObj.city,
     });
-    setPickupInput(`${pObj.name} (${pObj.landmark}), Assam`);
+    setPickupInput(pObj.address);
 
     setDestination({
-      address: `${dObj.name} (${dObj.landmark}), Assam`,
+      address: dObj.address,
       lat: dObj.lat,
       lng: dObj.lng,
-      city: dObj.name,
+      city: dObj.city,
     });
-    setDestInput(`${dObj.name} (${dObj.landmark}), Assam`);
+    setDestInput(dObj.address);
   };
 
   const handleBookRide = async () => {
     if (!pickup || !destination) return;
     setIsBooking(true);
     try {
-      await requestRide(pickup, destination, selectedVehicle, appliedCoupon || undefined);
+      await requestRide(pickup, destination, selectedVehicle);
     } finally {
       setIsBooking(false);
     }
@@ -179,18 +191,22 @@ export const CustomerHome: React.FC = () => {
 
       {/* Quick Town Corridor Presets */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
-        <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 shrink-0">Quick Routes:</span>
+        <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 shrink-0">Direct Hub Drops:</span>
         {[
-          { from: 'Bokakhat', to: 'Golaghat Town', label: 'Bokakhat ↔ Golaghat Town' },
-          { from: 'Kohora', to: 'Bokakhat', label: 'Kohora ↔ Bokakhat' },
-          { from: 'Bokakhat', to: 'Numaligarh', label: 'Bokakhat ↔ Numaligarh (NRL)' },
-          { from: 'Dergaon', to: 'Golaghat Town', label: 'Dergaon ↔ Golaghat' },
-          { from: 'Golaghat Town', to: 'Bokajan', label: 'Golaghat ↔ Bokajan' },
+          { from: 'Bokakhat', to: 'Golaghat Town', label: '📍 Bokakhat ↔ Golaghat' },
+          { from: 'Bokakhat', to: 'Jorhat ISBT', label: '🚗 Jorhat ISBT & City' },
+          { from: 'Golaghat Town', to: 'Guwahati Airport', label: '✈️ Guwahati Airport (GAU)' },
+          { from: 'Golaghat Town', to: 'Dibrugarh AMCH', label: '🏥 AMCH Dibrugarh Hospital' },
+          { from: 'Bokakhat', to: 'Kohora', label: '🦏 Kohora (Kaziranga)' },
+          { from: 'Dergaon', to: 'Numaligarh NRL', label: '🏭 Numaligarh (NRL)' },
+          { from: 'Golaghat Town', to: 'Furkating Junction', label: '🚆 Furkating Junction' },
+          { from: 'Golaghat Town', to: 'Sivasagar ASTC', label: '🏛️ Sivasagar Heritage' },
+          { from: 'Sarupathar', to: 'Dimapur Station', label: '🚉 Dimapur Hub' },
         ].map((r, i) => (
           <button
             key={i}
             onClick={() => handleSelectTownPair(r.from, r.to)}
-            className="px-3 py-1.5 rounded-full bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-800 font-bold whitespace-nowrap shadow-2xs transition-all cursor-pointer"
+            className="px-3 py-1.5 rounded-full bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-800 font-bold whitespace-nowrap shadow-2xs transition-all cursor-pointer text-[11px]"
           >
             {r.label}
           </button>
@@ -239,39 +255,29 @@ export const CustomerHome: React.FC = () => {
                 </button>
               </div>
 
-              {/* Pickup Input (Light Green marker) */}
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-emerald-100 shrink-0"></div>
-                <input
-                  type="text"
-                  value={pickupInput}
-                  onChange={e => {
-                    setPickupInput(e.target.value);
-                    setPickup(prev => ({ ...prev, address: e.target.value }));
-                  }}
-                  onFocus={() => setShowLocationSuggestions('pickup')}
-                  placeholder="Enter pickup town or landmark..."
-                  className="text-xs font-bold text-slate-900 w-full outline-hidden"
-                />
-              </div>
+              {/* Pickup Input with Instant Autocomplete Search & Select */}
+              <LocationSearchInput
+                label="Pickup Location (Golaghat / Assam)"
+                value={pickupInput}
+                onChange={handlePickupChange}
+                placeholder="Search pickup town, village, hospital, station..."
+                type="pickup"
+                onSelectCallback={() => {
+                  setTimeout(() => {
+                    destInputRef.current?.focus();
+                  }, 100);
+                }}
+              />
 
-              <div className="h-[1px] bg-slate-100 ml-5"></div>
-
-              {/* Destination Input (Orange marker) */}
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full bg-orange-500 ring-4 ring-orange-100 shrink-0"></div>
-                <input
-                  type="text"
-                  value={destInput}
-                  onChange={e => {
-                    setDestInput(e.target.value);
-                    setDestination(prev => ({ ...prev, address: e.target.value }));
-                  }}
-                  onFocus={() => setShowLocationSuggestions('dest')}
-                  placeholder="Search drop-off destination..."
-                  className="text-xs font-bold text-slate-900 w-full outline-hidden"
-                />
-              </div>
+              {/* Destination Input with Instant Autocomplete Search & Select */}
+              <LocationSearchInput
+                inputRef={destInputRef}
+                label="Drop Destination (Local or Jorhat, Guwahati, Dibrugarh...)"
+                value={destInput}
+                onChange={handleDestChange}
+                placeholder="Search drop point in Assam..."
+                type="destination"
+              />
 
               {/* Map Selection Helper Tip & Gaon Panchayat Quick Action */}
               <div className="flex flex-col gap-2">
@@ -292,7 +298,7 @@ export const CustomerHome: React.FC = () => {
                 <div className="bg-emerald-50/80 rounded-xl p-2 border border-emerald-200 flex items-center justify-between text-[11px]">
                   <div className="flex items-center gap-1.5 text-emerald-900 font-bold">
                     <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Tip: Map par kisi bhi town/pin par tap karke Pickup ya Drop set karein!</span>
+                    <span>Tip: Type karte hi dropdown se 1-click select karein ya map par tap karein!</span>
                   </div>
                 </div>
               </div>
@@ -301,7 +307,7 @@ export const CustomerHome: React.FC = () => {
               <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] font-black text-slate-700">
                 <div className="flex items-center gap-1">
                   <Navigation className="w-3 h-3 text-emerald-600" />
-                  <span>{distanceKm} km (NH Highway)</span>
+                  <span>{distanceKm} km (Live Distance)</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Clock className="w-3 h-3 text-orange-600" />
@@ -312,48 +318,20 @@ export const CustomerHome: React.FC = () => {
             </div>
           </div>
 
-          {/* Popular Landmarks Dropdown Suggestion Box */}
-          {showLocationSuggestions && (
-            <div className="mx-4 mt-3 p-3 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-1.5 animate-in fade-in">
-              <div className="flex items-center justify-between text-[10px] font-black text-emerald-900 uppercase tracking-widest px-1">
-                <span>Golaghat District Hubs & Landmarks</span>
-                <button 
-                  onClick={() => setShowLocationSuggestions(null)}
-                  className="text-slate-400 hover:text-slate-700 text-xs font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="max-h-48 overflow-y-auto space-y-1">
-                {POPULAR_LOCATIONS.map((loc, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => handleSelectPopularLoc(loc)}
-                    className="p-2 rounded-xl hover:bg-white text-xs cursor-pointer border border-transparent hover:border-emerald-200 flex items-center justify-between transition-all"
-                  >
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span className="text-slate-800 font-bold truncate max-w-[220px]">{loc.address}</span>
-                    </div>
-                    <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-black">
-                      {loc.tag}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Vehicle Selection Bento Tiles */}
           <div className="p-4 flex flex-col gap-2.5">
-            <h3 className="text-xs font-black text-slate-600 uppercase tracking-widest px-1 mt-1">
-              Select Vehicle Category (Golaghat Rates)
-            </h3>
+            <div className="flex items-center justify-between px-1 mt-1">
+              <h3 className="text-xs font-black text-slate-600 uppercase tracking-widest">
+                Vehicle Rates for {distanceKm} km
+              </h3>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                Live Auto-calculated
+              </span>
+            </div>
 
             <div className="flex flex-col gap-2.5">
               {/* Bike Option */}
               {(() => {
-                 const bFare = FareService.calculateFare('bike', distanceKm, FareService.estimateDurationMin(distanceKm, 'bike'), platformSettings, activeCouponObj);
                  const isSelected = selectedVehicle === 'bike';
                  return (
                    <div
@@ -368,12 +346,12 @@ export const CustomerHome: React.FC = () => {
                        <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center text-2xl font-black">🏍️</div>
                        <div>
                          <p className="font-display font-black text-sm text-slate-950 tracking-tight">EASY BIKE (KAZIRANGA EXPRESS)</p>
-                         <p className="text-[11px] text-slate-600 font-medium">Quick solo ride • ₹9/km</p>
+                         <p className="text-[11px] text-slate-600 font-medium">Solo Ride • ₹9/km (Base ₹25)</p>
                        </div>
                      </div>
                      <div className="text-right">
-                       <p className="font-display font-black text-lg text-emerald-800 font-mono-num">₹{bFare.totalFare}</p>
-                       {bFare.discount > 0 && <span className="text-[10px] text-orange-600 font-display font-black uppercase tracking-wider">₹{bFare.discount} OFF</span>}
+                       <p className="font-display font-black text-lg text-emerald-800 font-mono-num">₹{bikeFare.totalFare}</p>
+                       <span className="text-[10px] text-slate-400 font-medium">{distanceKm} km</span>
                      </div>
                    </div>
                  );
@@ -381,7 +359,6 @@ export const CustomerHome: React.FC = () => {
 
               {/* Auto Option */}
               {(() => {
-                 const aFare = FareService.calculateFare('auto', distanceKm, FareService.estimateDurationMin(distanceKm, 'auto'), platformSettings, activeCouponObj);
                  const isSelected = selectedVehicle === 'auto';
                  return (
                    <div
@@ -396,12 +373,12 @@ export const CustomerHome: React.FC = () => {
                        <div className="w-11 h-11 rounded-xl bg-orange-100 text-orange-900 flex items-center justify-center text-2xl font-black">🛺</div>
                        <div>
                          <p className="font-display font-black text-sm text-slate-950 tracking-tight">EASY AUTO (3-SEATER)</p>
-                         <p className="text-[11px] text-slate-600 font-medium">Local town travel • ₹13/km</p>
+                         <p className="text-[11px] text-slate-600 font-medium">Local Market & Town • ₹13/km (Base ₹35)</p>
                        </div>
                      </div>
                      <div className="text-right">
-                       <p className="font-display font-black text-lg text-orange-700 font-mono-num">₹{aFare.totalFare}</p>
-                       {aFare.discount > 0 && <span className="text-[10px] text-emerald-600 font-display font-black uppercase tracking-wider">₹{aFare.discount} OFF</span>}
+                       <p className="font-display font-black text-lg text-orange-700 font-mono-num">₹{autoFare.totalFare}</p>
+                       <span className="text-[10px] text-slate-400 font-medium">{distanceKm} km</span>
                      </div>
                    </div>
                  );
@@ -409,7 +386,6 @@ export const CustomerHome: React.FC = () => {
 
               {/* Cab Option */}
               {(() => {
-                 const cFare = FareService.calculateFare('cab', distanceKm, FareService.estimateDurationMin(distanceKm, 'cab'), platformSettings, activeCouponObj);
                  const isSelected = selectedVehicle === 'cab';
                  return (
                    <div
@@ -424,64 +400,16 @@ export const CustomerHome: React.FC = () => {
                        <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center text-2xl font-black">🚗</div>
                        <div>
                          <p className="font-display font-black text-sm text-slate-950 tracking-tight">EASY CAB PRIME (AC)</p>
-                         <p className="text-[11px] text-slate-600 font-medium">4-Seater AC Sedan • ₹17/km</p>
+                         <p className="text-[11px] text-slate-600 font-medium">4-Seater AC Sedan • ₹17/km (Base ₹65)</p>
                        </div>
                      </div>
                      <div className="text-right">
-                       <p className="font-display font-black text-lg text-emerald-800 font-mono-num">₹{cFare.totalFare}</p>
-                       {cFare.discount > 0 && <span className="text-[10px] text-orange-600 font-display font-black uppercase tracking-wider">₹{cFare.discount} OFF</span>}
+                       <p className="font-display font-black text-lg text-emerald-800 font-mono-num">₹{cabFare.totalFare}</p>
+                       <span className="text-[10px] text-slate-400 font-medium">{distanceKm} km</span>
                      </div>
                    </div>
                  );
                })()}
-            </div>
-
-            {/* Coupon Code Bento Box */}
-            <div className="bg-slate-50 rounded-2xl p-3 border border-emerald-200/80 space-y-2 mt-1">
-              <form onSubmit={handleApplyCoupon} className="flex gap-2">
-                <div className="relative flex-1">
-                  <Tag className="w-3 h-3 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={couponCode}
-                    onChange={e => setCouponCode(e.target.value.toUpperCase())}
-                    placeholder="Enter promo coupon (e.g. GOLAGHAT50)"
-                    className="w-full pl-7 pr-2 py-1.5 bg-white border border-slate-200 rounded-xl text-[11px] uppercase font-black text-slate-900 focus:outline-hidden"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black rounded-xl transition-colors cursor-pointer"
-                >
-                  Apply
-                </button>
-              </form>
-
-              {couponMessage && (
-                <p className={`text-[10px] font-bold flex items-center gap-1 ${couponMessage.success ? 'text-emerald-700' : 'text-red-600'}`}>
-                  {couponMessage.success ? <Check className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                  <span>{couponMessage.text}</span>
-                </p>
-              )}
-
-              {/* Coupon Chips */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[9px] font-black uppercase text-slate-400">Coupons:</span>
-                {coupons.filter(c => c.active).map(c => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => {
-                      setCouponCode(c.code);
-                      setAppliedCoupon(c.code);
-                      setCouponMessage({ text: `${c.code} activated!`, success: true });
-                    }}
-                    className="text-[9px] font-black px-2 py-0.5 rounded-full bg-orange-100 hover:bg-orange-200 text-orange-900 border border-orange-200 transition-colors cursor-pointer"
-                  >
-                    {c.code}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* Book Button in Vibrant Green/Orange with Bold Typography */}

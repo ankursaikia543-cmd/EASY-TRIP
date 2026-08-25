@@ -40,7 +40,7 @@ import {
 import { useRide } from '../../context/RideContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
-import { Coupon, VehicleType, ComplaintTicket, Ride, UserProfile } from '../../types';
+import { VehicleType, ComplaintTicket, Ride, UserProfile } from '../../types';
 import { InteractiveMap } from '../common/InteractiveMap';
 import { WebsiteMaintenanceTab } from './WebsiteMaintenanceTab';
 import { SupabaseService, SyncLog } from '../../supabase/supabaseService';
@@ -52,10 +52,7 @@ export const AdminDashboard: React.FC = () => {
     allDrivers, 
     complaints, 
     platformSettings, 
-    coupons, 
     updatePlatformSettings, 
-    createCoupon, 
-    toggleCoupon, 
     resolveComplaint 
   } = useRide();
   const { 
@@ -71,7 +68,7 @@ export const AdminDashboard: React.FC = () => {
   } = useAuth();
   const { addNotification } = useNotifications();
 
-  const [activeTab, setActiveTab] = useState<'maintenance' | 'bookings' | 'customers' | 'analytics' | 'drivers' | 'pricing' | 'coupons' | 'complaints' | 'supabase' | 'admin_slot'>('bookings');
+  const [activeTab, setActiveTab] = useState<'maintenance' | 'bookings' | 'customers' | 'analytics' | 'drivers' | 'pricing' | 'complaints' | 'supabase' | 'admin_slot'>('bookings');
 
   // Bookings Ledger Search & Filters State
   const [bookingSearch, setBookingSearch] = useState('');
@@ -124,12 +121,6 @@ export const AdminDashboard: React.FC = () => {
   const [settingsForm, setSettingsForm] = useState(platformSettings);
   const [settingsSaved, setSettingsSaved] = useState(false);
 
-  // New Coupon Form State
-  const [couponCode, setCouponCode] = useState('');
-  const [couponDiscount, setCouponDiscount] = useState('50');
-  const [couponType, setCouponType] = useState<'flat' | 'percentage'>('flat');
-  const [couponMinFare, setCouponMinFare] = useState('100');
-
   // AI Complaint State
   const [summarizingTicketId, setSummarizingTicketId] = useState<string | null>(null);
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, { summary: string; action: string }>>({});
@@ -149,25 +140,6 @@ export const AdminDashboard: React.FC = () => {
     setSettingsSaved(true);
     addNotification('Platform Pricing Updated', 'New base fares and commission rates are now live.', 'system');
     setTimeout(() => setSettingsSaved(false), 3000);
-  };
-
-  const handleCreateCoupon = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!couponCode.trim()) return;
-
-    createCoupon({
-      code: couponCode.trim().toUpperCase(),
-      description: `Special promotional discount coupon ${couponCode.trim().toUpperCase()}`,
-      discountValue: parseInt(couponDiscount, 10) || 50,
-      discountType: couponType,
-      minimumFare: parseInt(couponMinFare, 10) || 100,
-      maximumDiscount: couponType === 'percentage' ? 100 : parseInt(couponDiscount, 10) || 50,
-      expiryDate: '2026-12-31',
-      active: true,
-    });
-
-    setCouponCode('');
-    addNotification('Coupon Created', `Promo ${couponCode.toUpperCase()} is now active for riders.`, 'system');
   };
 
   // Filtered Customer Accounts
@@ -395,7 +367,6 @@ export const AdminDashboard: React.FC = () => {
           { id: 'analytics', label: '📊 OVERVIEW & KPIS' },
           { id: 'drivers', label: `🚗 DRIVERS & KYC (${allDrivers.length})` },
           { id: 'pricing', label: '💰 PRICING & SURGE' },
-          { id: 'coupons', label: `🎟️ COUPONS (${coupons.length})` },
           { id: 'complaints', label: `⚖️ AI GRIEVANCES (${complaints.length})` },
           { id: 'supabase', label: '⚡ SUPABASE DATABASE' },
           { id: 'admin_slot', label: '🔐 ADMIN SLOT (1/1)' },
@@ -1361,112 +1332,7 @@ export const AdminDashboard: React.FC = () => {
         </form>
       )}
 
-      {/* TAB 5: PROMO COUPONS ENGINE */}
-      {activeTab === 'coupons' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in">
-          
-          {/* Create Coupon Form (5 Cols) */}
-          <form onSubmit={handleCreateCoupon} className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
-            <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-              <Tag className="w-4 h-4 text-blue-600" />
-              <span>Create New Promo Coupon</span>
-            </h3>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Coupon Promo Code</label>
-              <input
-                type="text"
-                value={couponCode}
-                onChange={e => setCouponCode(e.target.value.toUpperCase())}
-                placeholder="e.g. MONSOON30"
-                required
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold uppercase text-slate-900 focus:outline-hidden"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Discount Amount</label>
-                <input
-                  type="number"
-                  value={couponDiscount}
-                  onChange={e => setCouponDiscount(e.target.value)}
-                  required
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Discount Type</label>
-                <select
-                  value={couponType}
-                  onChange={e => setCouponType(e.target.value as any)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden"
-                >
-                  <option value="flat">Flat ₹ Off</option>
-                  <option value="percentage">% Percentage</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Minimum Ride Fare (₹)</label>
-              <input
-                type="number"
-                value={couponMinFare}
-                onChange={e => setCouponMinFare(e.target.value)}
-                required
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3.5 bg-slate-900 hover:bg-black text-white text-xs font-extrabold rounded-2xl shadow-md transition-colors"
-            >
-              LAUNCH PROMO COUPON
-            </button>
-          </form>
-
-          {/* Active Coupons List (7 Cols) */}
-          <div className="lg:col-span-7 bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
-            <h3 className="font-extrabold text-sm text-slate-900">Active Campaign Coupons</h3>
-
-            <div className="space-y-3">
-              {coupons.map(c => (
-                <div key={c.id} className="p-4 rounded-2xl border border-slate-200 flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-black text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                        {c.code}
-                      </span>
-                      <span className="text-xs font-bold text-slate-900">
-                        {c.discountType === 'flat' ? `₹${c.discountValue} OFF` : `${c.discountValue}% OFF`}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Min fare: ₹{c.minimumFare} • Status: {c.active ? '🟢 Active' : '🔴 Inactive'}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => toggleCoupon(c.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
-                      c.active
-                        ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
-                        : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                    }`}
-                  >
-                    {c.active ? 'Disable' : 'Enable'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-        </div>
-      )}
-
-      {/* TAB 6: GRIEVANCE TICKETS & GEMINI AI DISPUTE ASSISTANT */}
+      {/* TAB: GRIEVANCE TICKETS & GEMINI AI DISPUTE ASSISTANT */}
       {activeTab === 'complaints' && (
         <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-6 animate-in fade-in">
           <div>

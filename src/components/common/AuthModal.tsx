@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   User, 
@@ -19,7 +19,12 @@ import {
   RefreshCw,
   FileText,
   HelpCircle,
-  Check
+  Check,
+  Send,
+  Smartphone,
+  MessageSquare,
+  Shield,
+  Edit3
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole, VehicleType } from '../../types';
@@ -55,13 +60,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   // Sync selectedRole when modal opens with a specific defaultRole
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       setSelectedRole(defaultRole);
       setErrorMessage('');
       setSuccessMessage('');
       setRegistrationSuccessData(null);
       setShowForgotPassword(false);
+      setOtpSent(false);
+      setOtpCode('');
+      setResendCountdown(0);
     }
   }, [isOpen, defaultRole]);
 
@@ -73,6 +81,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [otpCode, setOtpCode] = useState('');
   const [generatedOtp, setGeneratedOtp] = useState<string | null>(null);
   const [otpSent, setOtpSent] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [isOtpSending, setIsOtpSending] = useState(false);
 
   // Driver State
   const [driverPhone, setDriverPhone] = useState('');
@@ -108,6 +118,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     isPendingDriver?: boolean;
   } | null>(null);
 
+  // Countdown timer for OTP Resend
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (resendCountdown > 0) {
+      interval = setInterval(() => {
+        setResendCountdown(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendCountdown]);
+
   if (!isOpen) return null;
 
   // Handle Driver Photo Upload
@@ -125,17 +146,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   // 1. Send Login OTP
-  const handleSendOtp = () => {
+  const handleSendOtp = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
     const phone = selectedRole === 'customer' ? customerPhone : driverPhone;
-    if (!phone || phone.length < 10) {
-      setErrorMessage('Please enter a valid 10-digit mobile number.');
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setErrorMessage('Please enter a valid 10-digit mobile number before sending OTP.');
       return;
     }
-    const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
-    setGeneratedOtp(newOtp);
-    setOtpCode(newOtp); // prefilled for instant seamless verification
-    setOtpSent(true);
-    setSuccessMessage(`OTP sent to +91 ${phone}! Verification Code: ${newOtp}`);
+
+    setIsOtpSending(true);
+    setErrorMessage('');
+    
+    // Check if account already exists for this mobile number
+    const existingUser = allUsers.find(u => (u.phone || '').replace(/\D/g, '').slice(-10) === cleanPhone.slice(-10));
+    
+    setTimeout(() => {
+      const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
+      setGeneratedOtp(newOtp);
+      setOtpCode(newOtp); // prefilled for convenience
+      setOtpSent(true);
+      setResendCountdown(30);
+      setIsOtpSending(false);
+      
+      if (existingUser) {
+        setSuccessMessage(`📱 SMS Sent to Registered No: +91 ${cleanPhone.slice(-10)} (Account: ${existingUser.name}) | OTP: ${newOtp}`);
+      } else {
+        setSuccessMessage(`📱 SMS Sent to +91 ${cleanPhone.slice(-10)} | Verification OTP: ${newOtp}`);
+      }
+    }, 400);
   };
 
   // 2. Customer Submit (Login / Register)
@@ -149,7 +188,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           throw new Error('Please fill in your Name and Mobile Number.');
         }
         await register(
-          customerName,
+          customerName.trim(),
           customerEmail || `${customerPhone}@customer.easytrip.in`,
           customerPhone,
           'customer'
@@ -157,10 +196,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         const randomId = `ET-CUST-${Math.floor(10000 + Math.random() * 90000)}`;
         setRegistrationSuccessData({
           id: randomId,
-          name: customerName,
+          name: customerName.trim(),
           role: 'customer'
         });
-        setSuccessMessage(`Registration complete! Your Customer ID is ${randomId}.`);
+        setSuccessMessage(`Registration complete! Welcome ${customerName.trim()}. Your Customer ID is ${randomId}.`);
       } else {
         // Login Flow
         if (loginMethod === 'otp') {
@@ -173,7 +212,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             throw new Error('Invalid OTP entered. Please check and try again.');
           }
         }
-        await loginAs('customer', customerEmail || `${customerPhone}@easytrip.in`, customerName || 'Passenger');
+        // Pass customerPhone so it retrieves the exact registered user profile (e.g. Pranjal)
+        await loginAs('customer', customerEmail || `${customerPhone}@easytrip.in`, customerName?.trim() || undefined, customerPhone);
         setSuccessMessage('Login successful! Welcome back.');
         setTimeout(() => {
           onSuccess?.('customer');
@@ -198,7 +238,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           throw new Error('Please enter Driver Name, Phone, and Vehicle Number.');
         }
         await register(
-          driverName,
+          driverName.trim(),
           driverEmail || `${driverPhone}@driver.easytrip.in`,
           driverPhone,
           'driver',
@@ -213,11 +253,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         const randomId = `ET-DRV-${Math.floor(10000 + Math.random() * 90000)}`;
         setRegistrationSuccessData({
           id: randomId,
-          name: driverName,
+          name: driverName.trim(),
           role: 'driver',
           isPendingDriver: true,
         });
-        setSuccessMessage(`Registration submitted! Your Driver Partner ID is ${randomId}. Account is pending Admin activation.`);
+        setSuccessMessage(`Registration submitted! Welcome ${driverName.trim()}. Your Driver Partner ID is ${randomId}. Account is pending Admin activation.`);
       } else {
         // Login Flow
         if (loginMethod === 'otp') {
@@ -230,7 +270,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             throw new Error('Invalid OTP. Please check the code.');
           }
         }
-        await loginAs('driver', `${driverPhone}@driver.easytrip.in`, driverName || 'Driver Partner');
+        // Pass driverPhone to retrieve exact driver account
+        await loginAs('driver', `${driverPhone}@driver.easytrip.in`, driverName?.trim() || undefined, driverPhone);
         setSuccessMessage('Driver Partner Console Activated.');
         setTimeout(() => {
           onSuccess?.('driver');
@@ -596,11 +637,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {selectedRole === 'customer' && !showForgotPassword && !registrationSuccessData && (
             <form onSubmit={handleCustomerSubmit} className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-700">
-                  {authMode === 'register' ? 'New Customer Registration' : 'Passenger Sign In'}
+                <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{authMode === 'register' ? 'New Customer Registration' : 'Passenger Secure Sign In'}</span>
                 </span>
                 <span className="text-[11px] font-bold text-orange-600">
-                  {authMode === 'register' ? 'Auto-Assigns ID' : '⚡ Instant OTP'}
+                  {authMode === 'register' ? 'Auto-Assigns ID' : '⚡ 2-Step OTP Security'}
                 </span>
               </div>
 
@@ -609,42 +651,93 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl text-xs">
                   <button
                     type="button"
-                    onClick={() => setLoginMethod('otp')}
-                    className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    onClick={() => {
+                      setLoginMethod('otp');
+                      setErrorMessage('');
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       loginMethod === 'otp' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600'
                     }`}
                   >
-                    Login with OTP
+                    <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Login with OTP (Recommended)</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setLoginMethod('pin')}
-                    className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    onClick={() => {
+                      setLoginMethod('pin');
+                      setErrorMessage('');
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       loginMethod === 'pin' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600'
                     }`}
                   >
-                    Login with PIN
+                    <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Login with PIN</span>
                   </button>
                 </div>
               )}
 
+              {/* Mobile Number & Inline Send OTP option */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Mobile Number
-                </label>
-                <div className="relative">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Mobile Number
+                  </label>
+                  {authMode === 'login' && loginMethod === 'otp' && otpSent && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtpSent(false);
+                        setOtpCode('');
+                      }}
+                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      <span>Change Number</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative flex items-center">
                   <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs font-bold text-slate-500">
                     <span>+91</span>
                     <div className="w-[1px] h-3.5 bg-slate-300 ml-1"></div>
                   </div>
                   <input
                     type="tel"
+                    maxLength={10}
                     value={customerPhone}
-                    onChange={e => setCustomerPhone(e.target.value)}
-                    placeholder="Enter 10-digit number"
+                    disabled={otpSent && authMode === 'login' && loginMethod === 'otp'}
+                    onChange={e => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Enter 10-digit mobile number"
                     required
-                    className="w-full pl-16 pr-4 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-emerald-500 rounded-2xl text-xs font-bold text-slate-900 focus:outline-hidden transition-all"
+                    className={`w-full pl-16 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-emerald-500 rounded-2xl text-xs font-bold text-slate-900 focus:outline-hidden transition-all ${
+                      authMode === 'login' && loginMethod === 'otp' && !otpSent ? 'pr-28' : 'pr-4'
+                    } ${otpSent ? 'bg-emerald-50/50 border-emerald-300 text-emerald-950 font-mono' : ''}`}
                   />
+
+                  {/* Direct "Send OTP" Button embedded in input for quick access */}
+                  {authMode === 'login' && loginMethod === 'otp' && !otpSent && (
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      disabled={isOtpSending || customerPhone.length < 10}
+                      className={`absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-xl font-display font-black text-[11px] uppercase tracking-wider flex items-center gap-1 shadow-xs transition-all cursor-pointer ${
+                        customerPhone.length >= 10
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95'
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      }`}
+                      title="Send verification OTP code to this mobile number"
+                    >
+                      {isOtpSending ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3 h-3" />
+                      )}
+                      <span>{isOtpSending ? 'Sending...' : 'Send OTP'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -652,7 +745,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Full Name
+                      Passenger Full Name
                     </label>
                     <input
                       type="text"
@@ -679,21 +772,54 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </>
               )}
 
-              {/* Login OTP or PIN */}
+              {/* Login OTP Verification Card */}
               {authMode === 'login' && loginMethod === 'otp' && otpSent && (
-                <div className="space-y-1 animate-in fade-in">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Enter 4-Digit OTP Code
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={4}
-                    value={otpCode}
-                    onChange={e => setOtpCode(e.target.value)}
-                    placeholder="5432"
-                    className="w-full px-4 py-3 bg-emerald-50/50 border border-emerald-300 focus:bg-white focus:border-emerald-500 rounded-2xl text-center text-lg font-black tracking-widest text-emerald-900 focus:outline-hidden"
-                  />
-                  <p className="text-[10px] text-emerald-700 font-semibold">Demo PIN prefilled as {generatedOtp || '5432'}</p>
+                <div className="p-4 bg-emerald-50/80 border-2 border-emerald-300 rounded-2xl space-y-2.5 animate-in fade-in zoom-in-95">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-display font-black text-emerald-950 uppercase tracking-wider">
+                      <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Enter 4-Digit Login OTP</span>
+                    </div>
+                    
+                    {/* Resend OTP button with countdown timer */}
+                    {resendCountdown > 0 ? (
+                      <span className="text-[11px] font-bold text-slate-500 bg-white/80 px-2 py-0.5 rounded-md border border-slate-200">
+                        Resend in {resendCountdown}s
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleSendOtp}
+                        className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Resend OTP</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={otpCode}
+                      onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="• • • •"
+                      required
+                      autoFocus
+                      className="w-full px-4 py-3 bg-white border-2 border-emerald-400 focus:border-emerald-600 rounded-xl text-center text-xl font-mono font-black tracking-widest text-emerald-950 shadow-inner focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-emerald-800 bg-emerald-100/70 p-2 rounded-xl border border-emerald-200">
+                    <span className="font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>OTP Code Dispatched:</span>
+                    </span>
+                    <span className="font-mono font-black bg-white px-2 py-0.5 rounded-md text-emerald-950 border border-emerald-300">
+                      {generatedOtp || '5432'}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -713,22 +839,37 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               )}
 
-              {/* Action Buttons with Opposite Forgot Password Option */}
+              {/* Action Buttons with Send OTP & Login options */}
               <div className="space-y-2 pt-1">
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-display font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <span>
-                    {authMode === 'register'
-                      ? 'COMPLETE REGISTRATION & GET ID'
-                      : loginMethod === 'otp' && !otpSent
-                      ? 'GET LOGIN OTP'
-                      : 'SIGN IN TO EASY TRIP'}
-                  </span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                {authMode === 'login' && loginMethod === 'otp' && !otpSent ? (
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={isOtpSending || customerPhone.length < 10}
+                    className={`w-full py-3.5 rounded-2xl font-display font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      customerPhone.length >= 10
+                        ? 'bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white shadow-emerald-600/25'
+                        : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>{isOtpSending ? 'DISPATCHING OTP...' : 'SEND SECURE LOGIN OTP'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-display font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>
+                      {authMode === 'register'
+                        ? 'COMPLETE REGISTRATION & GET ID'
+                        : 'VERIFY OTP & SECURE LOGIN'}
+                    </span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
 
                 {/* Login opposite side buttons: Forgot Password & Registration / Demo */}
                 {authMode === 'login' && (
@@ -767,8 +908,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {selectedRole === 'driver' && !showForgotPassword && !registrationSuccessData && (
             <form onSubmit={handleDriverSubmit} className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-orange-700">
-                  {authMode === 'register' ? 'Driver Partner Registration (Assam Fleet)' : 'Driver Partner Sign In'}
+                <span className="text-xs font-extrabold uppercase tracking-wider text-orange-700 flex items-center gap-1.5">
+                  <Car className="w-3.5 h-3.5 text-orange-600" />
+                  <span>{authMode === 'register' ? 'Driver Partner Registration (Assam Fleet)' : 'Driver Partner Secure Sign In'}</span>
                 </span>
                 <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
                   15% Low Commission
@@ -780,42 +922,93 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl text-xs">
                   <button
                     type="button"
-                    onClick={() => setLoginMethod('otp')}
-                    className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    onClick={() => {
+                      setLoginMethod('otp');
+                      setErrorMessage('');
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       loginMethod === 'otp' ? 'bg-white text-orange-800 shadow-2xs' : 'text-slate-600'
                     }`}
                   >
-                    Login with OTP
+                    <Smartphone className="w-3.5 h-3.5 text-orange-600" />
+                    <span>Login with OTP (Recommended)</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setLoginMethod('pin')}
-                    className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    onClick={() => {
+                      setLoginMethod('pin');
+                      setErrorMessage('');
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       loginMethod === 'pin' ? 'bg-white text-orange-800 shadow-2xs' : 'text-slate-600'
                     }`}
                   >
-                    Login with PIN
+                    <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Login with PIN</span>
                   </button>
                 </div>
               )}
 
+              {/* Driver Phone & Inline Send OTP option */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Registered Driver Phone
-                </label>
-                <div className="relative">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Registered Driver Phone
+                  </label>
+                  {authMode === 'login' && loginMethod === 'otp' && otpSent && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtpSent(false);
+                        setOtpCode('');
+                      }}
+                      className="text-[11px] font-bold text-orange-700 hover:text-orange-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      <span>Change Number</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative flex items-center">
                   <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs font-bold text-slate-500">
                     <span>+91</span>
                     <div className="w-[1px] h-3.5 bg-slate-300 ml-1"></div>
                   </div>
                   <input
                     type="tel"
+                    maxLength={10}
                     value={driverPhone}
-                    onChange={e => setDriverPhone(e.target.value)}
-                    placeholder="Enter 10-digit number"
+                    disabled={otpSent && authMode === 'login' && loginMethod === 'otp'}
+                    onChange={e => setDriverPhone(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Enter 10-digit registered number"
                     required
-                    className="w-full pl-16 pr-4 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-orange-500 rounded-2xl text-xs font-bold text-slate-900 focus:outline-hidden transition-all"
+                    className={`w-full pl-16 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-orange-500 rounded-2xl text-xs font-bold text-slate-900 focus:outline-hidden transition-all ${
+                      authMode === 'login' && loginMethod === 'otp' && !otpSent ? 'pr-28' : 'pr-4'
+                    } ${otpSent ? 'bg-orange-50/50 border-orange-300 text-orange-950 font-mono' : ''}`}
                   />
+
+                  {/* Direct "Send OTP" Button embedded in driver input */}
+                  {authMode === 'login' && loginMethod === 'otp' && !otpSent && (
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      disabled={isOtpSending || driverPhone.length < 10}
+                      className={`absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-xl font-display font-black text-[11px] uppercase tracking-wider flex items-center gap-1 shadow-xs transition-all cursor-pointer ${
+                        driverPhone.length >= 10
+                          ? 'bg-orange-600 hover:bg-orange-700 text-white active:scale-95'
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      }`}
+                      title="Send verification OTP code to driver phone"
+                    >
+                      {isOtpSending ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3 h-3" />
+                      )}
+                      <span>{isOtpSending ? 'Sending...' : 'Send OTP'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -930,21 +1123,54 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </>
               )}
 
-              {/* Login OTP or PIN */}
+              {/* Driver Login OTP Verification Card */}
               {authMode === 'login' && loginMethod === 'otp' && otpSent && (
-                <div className="space-y-1 animate-in fade-in">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Enter 4-Digit OTP Code
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={4}
-                    value={otpCode}
-                    onChange={e => setOtpCode(e.target.value)}
-                    placeholder="5432"
-                    className="w-full px-4 py-3 bg-orange-50/50 border border-orange-300 focus:bg-white focus:border-orange-500 rounded-2xl text-center text-lg font-black tracking-widest text-orange-950 focus:outline-hidden"
-                  />
-                  <p className="text-[10px] text-orange-700 font-semibold">Demo PIN prefilled as {generatedOtp || '5432'}</p>
+                <div className="p-4 bg-orange-50/80 border-2 border-orange-300 rounded-2xl space-y-2.5 animate-in fade-in zoom-in-95">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-display font-black text-orange-950 uppercase tracking-wider">
+                      <Shield className="w-3.5 h-3.5 text-orange-600" />
+                      <span>Enter Driver Login OTP</span>
+                    </div>
+
+                    {/* Resend OTP button with countdown */}
+                    {resendCountdown > 0 ? (
+                      <span className="text-[11px] font-bold text-slate-500 bg-white/80 px-2 py-0.5 rounded-md border border-slate-200">
+                        Resend in {resendCountdown}s
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleSendOtp}
+                        className="text-[11px] font-bold text-orange-700 hover:text-orange-900 underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Resend OTP</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={otpCode}
+                      onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="• • • •"
+                      required
+                      autoFocus
+                      className="w-full px-4 py-3 bg-white border-2 border-orange-400 focus:border-orange-600 rounded-xl text-center text-xl font-mono font-black tracking-widest text-orange-950 shadow-inner focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-orange-900 bg-orange-100/70 p-2 rounded-xl border border-orange-200">
+                    <span className="font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-orange-600" />
+                      <span>Driver OTP Dispatched:</span>
+                    </span>
+                    <span className="font-mono font-black bg-white px-2 py-0.5 rounded-md text-orange-950 border border-orange-300">
+                      {generatedOtp || '5432'}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -964,22 +1190,37 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               )}
 
-              {/* Action Buttons with Opposite Forgot Password */}
+              {/* Action Buttons with Send OTP & Login */}
               <div className="space-y-2 pt-1">
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 active:scale-98 text-white rounded-2xl font-display font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <span>
-                    {authMode === 'register'
-                      ? 'REGISTER DRIVER (SUBMIT FOR ADMIN ACTIVATION)'
-                      : loginMethod === 'otp' && !otpSent
-                      ? 'GET LOGIN OTP'
-                      : 'OPEN DRIVER CONSOLE'}
-                  </span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                {authMode === 'login' && loginMethod === 'otp' && !otpSent ? (
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={isOtpSending || driverPhone.length < 10}
+                    className={`w-full py-3.5 rounded-2xl font-display font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      driverPhone.length >= 10
+                        ? 'bg-orange-600 hover:bg-orange-700 active:scale-98 text-white shadow-orange-600/25'
+                        : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>{isOtpSending ? 'DISPATCHING DRIVER OTP...' : 'SEND DRIVER LOGIN OTP'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 active:scale-98 text-white rounded-2xl font-display font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>
+                      {authMode === 'register'
+                        ? 'REGISTER DRIVER (SUBMIT FOR ADMIN ACTIVATION)'
+                        : 'VERIFY OTP & OPEN DRIVER CONSOLE'}
+                    </span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
 
                 {authMode === 'login' && (
                   <div className="flex items-center justify-between pt-1 px-1 text-xs">

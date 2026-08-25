@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   MapPin, 
   Navigation, 
@@ -6,18 +6,15 @@ import {
   ExternalLink, 
   ZoomIn, 
   ZoomOut, 
-  Crosshair, 
   Maximize2, 
   Minimize2, 
-  Building2, 
-  Info,
-  CheckCircle2,
-  Sparkles,
-  Map as MapIcon,
-  Compass
+  CheckCircle2, 
+  Compass,
+  Search,
+  Building
 } from 'lucide-react';
 import { LocationPoint } from '../../types';
-import { GOLAGHAT_TOWNS, POPULAR_LOCATIONS, GOLAGHAT_GAON_PANCHAYATS } from '../../utils/initialData';
+import { ALL_ASSAM_LOCATIONS, LocationItem } from '../../utils/locationDatabase';
 
 interface GoogleMapsProps {
   pickup?: LocationPoint;
@@ -40,11 +37,13 @@ export const GoogleMapsEmbed: React.FC<GoogleMapsProps> = ({
   const [zoom, setZoom] = useState<number>(12);
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
   const [selectedQuickLoc, setSelectedQuickLoc] = useState<string | null>(null);
+  const [activeRegionTab, setActiveRegionTab] = useState<'all' | 'golaghat' | 'jorhat' | 'guwahati' | 'dibrugarh' | 'outstation'>('golaghat');
   const [activePinPrompt, setActivePinPrompt] = useState<{
     name: string;
     lat: number;
     lng: number;
     address: string;
+    tag?: string;
   } | null>(null);
 
   // Center coordinates calculation
@@ -65,13 +64,24 @@ export const GoogleMapsEmbed: React.FC<GoogleMapsProps> = ({
     ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(pickup.address || `${pickup.lat},${pickup.lng}`)}&destination=${encodeURIComponent(destination.address || `${destination.lat},${destination.lng}`)}&travelmode=driving`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pickup?.address || destination?.address || 'Golaghat, Assam')}`;
 
-  const handleQuickSelect = (loc: { name: string; lat: number; lng: number; landmark: string }) => {
+  const displayedLocations = ALL_ASSAM_LOCATIONS.filter(item => {
+    if (activeRegionTab === 'all') return true;
+    if (activeRegionTab === 'golaghat') return item.region === 'golaghat';
+    if (activeRegionTab === 'jorhat') return item.region === 'jorhat';
+    if (activeRegionTab === 'guwahati') return item.region === 'guwahati';
+    if (activeRegionTab === 'dibrugarh') return item.region === 'dibrugarh';
+    if (activeRegionTab === 'outstation') return item.region !== 'golaghat';
+    return true;
+  });
+
+  const handleQuickSelect = (loc: LocationItem) => {
     setSelectedQuickLoc(loc.name);
     setActivePinPrompt({
       name: loc.name,
       lat: loc.lat,
       lng: loc.lng,
-      address: `${loc.name}, ${loc.landmark}, Golaghat District, Assam`,
+      address: loc.address,
+      tag: loc.tag,
     });
   };
 
@@ -107,7 +117,7 @@ export const GoogleMapsEmbed: React.FC<GoogleMapsProps> = ({
         <div className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/95 backdrop-blur-md border border-emerald-300 shadow-md text-xs font-black text-slate-900">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
           <span className="truncate max-w-[200px]">
-            {pickup ? `Pickup: ${pickup.address.split(',')[0]}` : 'Golaghat Live Google Map'}
+            {pickup && destination ? `${pickup.city || 'Pickup'} ➔ ${destination.city || 'Drop'}` : pickup ? `Pickup: ${pickup.city || pickup.address.split(',')[0]}` : 'Assam Live Google Map'}
           </span>
         </div>
 
@@ -171,38 +181,65 @@ export const GoogleMapsEmbed: React.FC<GoogleMapsProps> = ({
 
       {/* Embedded Live Google Maps Iframe */}
       <iframe
-        title="Golaghat District Google Map"
+        title="Assam Google Map"
         src={embedUrl}
-        className="w-full h-full border-0 grayscale-[10%] contrast-[105%]"
+        className="w-full h-full border-0 grayscale-[5%] contrast-[105%]"
         loading="lazy"
         allowFullScreen
         referrerPolicy="no-referrer-when-downgrade"
       />
 
-      {/* Bottom Quick-Select Chips Bar for Short Distance Precision */}
+      {/* Bottom Quick-Select Chips Bar for Micro-Areas & Cities */}
       <div className="absolute bottom-2 left-2 right-2 z-20 pointer-events-none">
-        <div className="pointer-events-auto bg-slate-950/85 backdrop-blur-md rounded-2xl p-2 border border-slate-700 shadow-xl flex flex-col gap-1.5">
+        <div className="pointer-events-auto bg-slate-950/90 backdrop-blur-md rounded-2xl p-2.5 border border-slate-700 shadow-xl flex flex-col gap-1.5">
           <div className="flex items-center justify-between px-1 text-[10px] font-black uppercase tracking-wider text-emerald-400">
             <div className="flex items-center gap-1">
               <Compass className="w-3 h-3 text-orange-400" />
-              <span>Golaghat District Short Distance Hubs & Landmarks:</span>
+              <span>Map Locations (Golaghat, Jorhat, Guwahati, Dibrugarh & Outstation):</span>
             </div>
-            <span className="text-slate-400 font-normal">Tap point to set Pickup or Drop</span>
+            <span className="text-slate-300 font-normal hidden sm:inline">Tap any point to set Pickup or Drop</span>
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-            {GOLAGHAT_TOWNS.map(town => (
+          {/* Region Filter Chips */}
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+            {[
+              { key: 'golaghat', label: '📍 Golaghat & Villages' },
+              { key: 'jorhat', label: '🚗 Jorhat Hubs' },
+              { key: 'guwahati', label: '✈️ Guwahati Hubs' },
+              { key: 'dibrugarh', label: '🏥 Dibrugarh Hubs' },
+              { key: 'outstation', label: '🛣️ All Outstations' },
+              { key: 'all', label: '🌟 All (100+)' },
+            ].map(tab => (
               <button
-                key={town.id}
+                key={tab.key}
                 type="button"
-                onClick={() => handleQuickSelect(town)}
-                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
-                  selectedQuickLoc === town.name
-                    ? 'bg-emerald-500 text-slate-950 shadow-xs scale-105'
-                    : 'bg-white/10 hover:bg-white/20 text-white border border-white/10'
+                onClick={() => setActiveRegionTab(tab.key as any)}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all cursor-pointer ${
+                  activeRegionTab === tab.key
+                    ? 'bg-orange-500 text-slate-950 font-black'
+                    : 'bg-white/10 hover:bg-white/20 text-slate-200'
                 }`}
               >
-                📍 {town.name}
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Horizontal scrollable Location Chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 pt-0.5">
+            {displayedLocations.map(loc => (
+              <button
+                key={loc.id}
+                type="button"
+                onClick={() => handleQuickSelect(loc)}
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                  selectedQuickLoc === loc.name
+                    ? 'bg-emerald-500 text-slate-950 shadow-xs scale-105'
+                    : 'bg-white/10 hover:bg-white/25 text-white border border-white/10'
+                }`}
+              >
+                <span>{loc.category === 'airport' ? '✈️' : loc.category === 'railway' ? '🚆' : loc.category === 'hospital' ? '🏥' : '📍'}</span>
+                <span>{loc.name}</span>
               </button>
             ))}
           </div>
@@ -219,6 +256,11 @@ export const GoogleMapsEmbed: React.FC<GoogleMapsProps> = ({
                 <h4 className="font-display font-black text-xs text-slate-950">{activePinPrompt.name}</h4>
               </div>
               <p className="text-[10px] text-slate-500 mt-0.5">{activePinPrompt.address}</p>
+              {activePinPrompt.tag && (
+                <span className="inline-block mt-1 text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-bold">
+                  {activePinPrompt.tag}
+                </span>
+              )}
             </div>
             <button
               type="button"
@@ -254,3 +296,4 @@ export const GoogleMapsEmbed: React.FC<GoogleMapsProps> = ({
     </div>
   );
 };
+

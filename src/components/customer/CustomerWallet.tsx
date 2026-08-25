@@ -165,7 +165,7 @@ export const CustomerWallet: React.FC = () => {
                 <ArrowDownLeft className="w-4 h-4" />
               </div>
               <div>
-                <p className="font-bold text-slate-900">Welcome Cashback (Promo EASY50)</p>
+                <p className="font-bold text-slate-900">Wallet Account Activation Credit</p>
                 <span className="text-[10px] text-slate-400">3 days ago</span>
               </div>
             </div>

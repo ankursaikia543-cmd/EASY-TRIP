@@ -130,21 +130,21 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   // Search Results for quick select
   const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
+    if (!searchQuery.trim()) return { locMatches: [], gpMatches: [] };
     const q = searchQuery.toLowerCase();
     
-    // Check popular locations
+    // Check popular locations and all Assam places
     const locMatches = POPULAR_LOCATIONS.filter(l => 
       l.address.toLowerCase().includes(q) || 
       (l.tag && l.tag.toLowerCase().includes(q))
-    ).slice(0, 3);
+    ).slice(0, 4);
 
     // Check Gaon Panchayats & Villages
     const gpMatches = GOLAGHAT_GAON_PANCHAYATS.filter(gp =>
       gp.name.toLowerCase().includes(q) ||
       gp.headquarter.toLowerCase().includes(q) ||
       gp.villages.some(v => v.toLowerCase().includes(q))
-    ).slice(0, 3);
+    ).slice(0, 4);
 
     return { locMatches, gpMatches };
   }, [searchQuery]);
