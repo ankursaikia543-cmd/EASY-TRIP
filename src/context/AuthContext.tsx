@@ -20,8 +20,12 @@ interface AuthContextType {
   updateDriverProfile: (updates: Partial<DriverProfile>) => void;
   adminApproveDriver: (driverId: string) => void;
   adminRejectDriver: (driverId: string, reason?: string) => void;
+  adminToggleDriverActive: (driverId: string, active: boolean) => void;
+  adminDeleteDriver: (driverId: string) => void;
+  adminDeleteUser: (userId: string) => void;
   payDriverAdminFee: (driverId: string, amount: number, upiTxnId: string, method?: string, bookingCount?: number) => void;
   adminToggleDriverFeeStatus: (driverId: string, isPaid: boolean, dueAmount?: number) => void;
+  resetUserPassword: (phone: string, newPin: string) => Promise<{ success: boolean; message: string }>;
   topUpWallet: (amount: number) => void;
   allDrivers: DriverProfile[];
   allUsers: UserProfile[];
@@ -215,8 +219,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     setIsLoading(true);
     try {
+      // Auto-generate official structured Easy Trip ID
+      const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+      const generatedUserId = role === 'customer' 
+        ? `ET-CUST-${randomSuffix}` 
+        : role === 'driver' 
+        ? `ET-DRV-${randomSuffix}` 
+        : `ET-ADM-${randomSuffix}`;
+
       const newUser: UserProfile = {
-        id: `user-${role}-${Date.now()}`,
+        id: generatedUserId,
         name,
         email,
         phone,
@@ -231,13 +243,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(newUser);
 
       if (role === 'driver') {
+        const generatedDriverId = `DRV-${randomSuffix}`;
         const newDriver: DriverProfile = {
-          id: `drv-${Date.now()}`,
+          id: generatedDriverId,
           userId: newUser.id,
           name,
           phone,
           email,
-          photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
+          photoURL: driverData?.photoURL || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
           vehicleType: driverData?.vehicleType || 'bike',
           vehicleBrand: driverData?.vehicleBrand || 'Hero',
           vehicleModel: driverData?.vehicleModel || 'Glamour 125',
@@ -250,7 +263,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             insuranceUrl: driverData?.documents?.insuranceUrl || 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=400&auto=format&fit=crop&q=80',
             submittedAt: new Date().toISOString(),
           },
-          approvalStatus: 'pending', // Pending Admin verification
+          approvalStatus: 'pending', // Per strict policy: Awaiting Admin Activation
           onlineStatus: 'offline',
           availabilityStatus: 'available',
           currentLocation: {
@@ -265,11 +278,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           todayEarnings: 0,
           totalEarnings: 0,
           platformCommissionRate: 0.15,
+          isFeePaid: true,
+          feeDueAmount: 0,
           createdAt: new Date().toISOString(),
         };
 
         setAllDrivers(prev => [...prev, newDriver]);
         setDriverProfile(newDriver);
+        SupabaseService.syncDriver(newDriver);
       }
     } finally {
       setIsLoading(false);
@@ -330,6 +346,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAllDrivers(prev => prev.map(d => {
       if (d.id === driverId) {
         const updated: DriverProfile = { ...d, approvalStatus: 'approved' };
+        if (driverProfile?.id === driverId) {
+          setDriverProfile(updated);
+        }
         SupabaseService.syncDriver(updated);
         return updated;
       }
@@ -341,11 +360,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAllDrivers(prev => prev.map(d => {
       if (d.id === driverId) {
         const updated: DriverProfile = { ...d, approvalStatus: 'rejected', rejectionReason: reason };
+        if (driverProfile?.id === driverId) {
+          setDriverProfile(updated);
+        }
         SupabaseService.syncDriver(updated);
         return updated;
       }
       return d;
     }));
+  };
+
+  const adminToggleDriverActive = (driverId: string, active: boolean) => {
+    setAllDrivers(prev => prev.map(d => {
+      if (d.id === driverId) {
+        const updated: DriverProfile = { 
+          ...d, 
+          approvalStatus: active ? 'approved' : 'rejected',
+          onlineStatus: active ? d.onlineStatus : 'offline'
+        };
+        if (driverProfile?.id === driverId) {
+          setDriverProfile(updated);
+        }
+        SupabaseService.syncDriver(updated);
+        return updated;
+      }
+      return d;
+    }));
+  };
+
+  const adminDeleteDriver = (driverId: string) => {
+    setAllDrivers(prev => prev.filter(d => d.id !== driverId));
+    if (driverProfile?.id === driverId) {
+      setDriverProfile(null);
+    }
+  };
+
+  const adminDeleteUser = (userId: string) => {
+    setAllUsers(prev => prev.filter(u => u.id !== userId));
+    setAllDrivers(prev => prev.filter(d => d.userId !== userId));
+    if (user?.id === userId) {
+      setUser(null);
+      setDriverProfile(null);
+    }
+  };
+
+  const resetUserPassword = async (phone: string, newPin: string): Promise<{ success: boolean; message: string }> => {
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    const existing = allUsers.find(u => u.phone.replace(/\D/g, '').endsWith(cleanPhone));
+    if (!existing) {
+      return { success: false, message: 'No registered user account found with this phone number.' };
+    }
+    // Update PIN in storage
+    localStorage.setItem(`easytrip_user_pin_${cleanPhone}`, newPin);
+    return { success: true, message: 'Password/PIN reset successfully! You can now login.' };
   };
 
   const payDriverAdminFee = (
@@ -499,8 +566,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateDriverProfile,
         adminApproveDriver,
         adminRejectDriver,
+        adminToggleDriverActive,
+        adminDeleteDriver,
+        adminDeleteUser,
         payDriverAdminFee,
         adminToggleDriverFeeStatus,
+        resetUserPassword,
         topUpWallet,
         allDrivers,
         allUsers,

@@ -26,6 +26,7 @@ import { useRide } from '../../context/RideContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { InteractiveMap } from '../common/InteractiveMap';
+import { GoogleMapsEmbed } from '../common/GoogleMapsEmbed';
 import { ChatModal } from '../common/ChatModal';
 import { AdminUpiQrCard } from './AdminUpiQrCard';
 import { DriverFeeModal } from './DriverFeeModal';
@@ -45,6 +46,7 @@ export const DriverHome: React.FC = () => {
   const { t } = useLanguage();
   const { addNotification } = useNotifications();
 
+  const [mapEngine, setMapEngine] = useState<'google' | 'district'>('google');
   const [otpInput, setOtpInput] = useState('');
   const [otpError, setOtpError] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
@@ -241,15 +243,30 @@ export const DriverHome: React.FC = () => {
         </div>
       )}
 
-      {/* KYC Warning if pending */}
+      {/* KYC & Admin Activation Warning if pending or inactive */}
       {!isApproved && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-3xl flex items-start gap-3 text-xs text-amber-900 animate-in fade-in">
-          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h4 className="font-bold">Driver KYC Documents Under Review</h4>
-            <p className="text-amber-800 text-[11px] mt-0.5 leading-relaxed">
-              Your driving license and vehicle registration are currently undergoing admin approval. You will be authorized to go online once approved. (You can approve this profile instantly in the Admin Panel).
-            </p>
+        <div className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-amber-950 shadow-md animate-in fade-in">
+          <div className="flex items-start gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+              <Lock className="w-6 h-6" />
+            </div>
+            <div className="flex-1 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-display font-black uppercase tracking-wider">
+                  DRIVER APP LOCKED
+                </span>
+                <h4 className="font-display font-black text-sm text-amber-950">Awaiting Admin Portal Activation</h4>
+              </div>
+              <p className="text-amber-900 text-xs leading-relaxed">
+                As per safety and licensing regulations, <strong>no driver can use this app until the Super Admin presses the Activate button</strong> in the Admin Portal. Once verified, your status will turn active automatically.
+              </p>
+            </div>
+          </div>
+
+          <div className="shrink-0 flex items-center gap-2 self-stretch sm:self-center">
+            <span className="px-4 py-2 rounded-xl bg-white border border-amber-300 font-display font-black text-xs text-amber-900 uppercase">
+              Status: {driverProfile?.approvalStatus?.toUpperCase() || 'PENDING'}
+            </span>
           </div>
         </div>
       )}
@@ -397,16 +414,57 @@ export const DriverHome: React.FC = () => {
 
         </div>
 
-        {/* Right Column: Interactive Navigation Map */}
-        <div className="lg:col-span-7 space-y-4">
-          <InteractiveMap
-            pickup={activeRide?.pickup}
-            destination={activeRide?.destination}
-            driverLocation={activeRide?.driverLocation}
-            vehicleType={driverProfile?.vehicleType || 'cab'}
-            status={activeRide?.status}
-            heightClass="h-[460px] sm:h-[560px]"
-          />
+        {/* Right Column: Navigation Map with Engine Switcher */}
+        <div className="lg:col-span-7 bg-white rounded-3xl p-3 border-2 border-emerald-100 shadow-xs space-y-3">
+          
+          {/* Map Engine Switcher Header */}
+          <div className="flex items-center justify-between p-2 bg-slate-50 rounded-2xl border border-slate-200">
+            <div className="flex items-center gap-1.5 px-2 text-xs font-display font-black text-slate-800">
+              <Navigation className="w-3.5 h-3.5 text-emerald-600" />
+              <span>DRIVER GPS ROUTE:</span>
+            </div>
+            <div className="flex items-center bg-white p-0.5 rounded-xl border border-slate-200 shadow-2xs text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setMapEngine('google')}
+                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                  mapEngine === 'google'
+                    ? 'bg-emerald-600 text-white font-black shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                🌐 Google Maps (Live Route)
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapEngine('district')}
+                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                  mapEngine === 'district'
+                    ? 'bg-emerald-600 text-white font-black shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                📍 Golaghat District / GP
+              </button>
+            </div>
+          </div>
+
+          {mapEngine === 'google' ? (
+            <GoogleMapsEmbed
+              pickup={activeRide?.pickup}
+              destination={activeRide?.destination}
+              heightClass="h-[460px] sm:h-[520px]"
+            />
+          ) : (
+            <InteractiveMap
+              pickup={activeRide?.pickup}
+              destination={activeRide?.destination}
+              driverLocation={activeRide?.driverLocation}
+              vehicleType={driverProfile?.vehicleType || 'cab'}
+              status={activeRide?.status}
+              heightClass="h-[460px] sm:h-[520px]"
+            />
+          )}
         </div>
 
       </div>

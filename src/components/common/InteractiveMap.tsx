@@ -233,6 +233,44 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   };
 
+  const handleMapCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = (e.clientX - rect.left) / rect.width;
+    const clickY = (e.clientY - rect.top) / rect.height;
+
+    const percentX = Math.max(5, Math.min(95, clickX * 100));
+    const percentY = Math.max(5, Math.min(95, clickY * 100));
+
+    const normalizedLng = (percentX - 8) / 84;
+    const normalizedLat = (percentY - 9) / 82;
+
+    const calculatedLng = GOLAGHAT_BOUNDS.minLng + normalizedLng * (GOLAGHAT_BOUNDS.maxLng - GOLAGHAT_BOUNDS.minLng);
+    const calculatedLat = GOLAGHAT_BOUNDS.maxLat - normalizedLat * (GOLAGHAT_BOUNDS.maxLat - GOLAGHAT_BOUNDS.minLat);
+
+    // Find nearest landmark or town
+    let nearest = GOLAGHAT_TOWNS[0];
+    let minD = 9999;
+    GOLAGHAT_TOWNS.forEach(t => {
+      const d = Math.hypot(t.lat - calculatedLat, t.lng - calculatedLng);
+      if (d < minD) {
+        minD = d;
+        nearest = t;
+      }
+    });
+
+    const labelName = minD < 0.05 ? `Near ${nearest.name}` : `Location (${calculatedLat.toFixed(3)}°N, ${calculatedLng.toFixed(3)}°E)`;
+
+    setActivePinPopup({
+      name: labelName,
+      address: `${labelName}, Golaghat District, Assam`,
+      lat: Number(calculatedLat.toFixed(4)),
+      lng: Number(calculatedLng.toFixed(4)),
+      landmark: minD < 0.05 ? `Close to ${nearest.landmark}` : `Directly pinned on map (${calculatedLat.toFixed(3)}° N, ${calculatedLng.toFixed(3)}° E)`,
+      x: percentX,
+      y: percentY,
+    });
+  };
+
   return (
     <div 
       className={`relative w-full ${isFullScreen ? 'fixed inset-0 z-50 rounded-none h-screen bg-slate-950 p-2 sm:p-4' : `${heightClass} rounded-3xl`} overflow-hidden border border-emerald-200 shadow-inner bg-slate-900 select-none group transition-all duration-300`}
@@ -454,7 +492,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
       {/* Interactive Map Vector Canvas */}
       <div 
-        onClick={() => setActivePinPopup(null)}
+        onClick={handleMapCanvasClick}
         className={`absolute inset-0 transition-transform duration-300 cursor-crosshair ${
           mapStyle === 'satellite' 
             ? 'bg-slate-950' 

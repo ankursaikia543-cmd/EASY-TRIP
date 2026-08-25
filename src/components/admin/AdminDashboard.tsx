@@ -62,6 +62,9 @@ export const AdminDashboard: React.FC = () => {
     allUsers, 
     adminApproveDriver, 
     adminRejectDriver, 
+    adminToggleDriverActive,
+    adminDeleteDriver,
+    adminDeleteUser,
     adminToggleDriverFeeStatus,
     isAdminSlotClaimed, 
     masterAdminAccount 
@@ -603,16 +606,17 @@ export const AdminDashboard: React.FC = () => {
                               <button
                                 onClick={() => {
                                   adminApproveDriver(drv.id);
-                                  addNotification('Driver Approved', `${drv.name} has been verified and authorized for duty.`, 'system');
+                                  addNotification('Driver Activated & Approved', `${drv.name} has been activated by Super Admin. Driver app is now unlocked.`, 'system');
                                 }}
                                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-xs cursor-pointer"
+                                title="Activate driver account and allow app use"
                               >
-                                <Check className="w-3.5 h-3.5" /> Approve
+                                <Check className="w-3.5 h-3.5" /> Activate App
                               </button>
                               <button
                                 onClick={() => {
                                   adminRejectDriver(drv.id);
-                                  addNotification('Driver Rejected', `${drv.name}'s KYC was declined.`, 'system');
+                                  addNotification('Driver Rejected', `${drv.name}'s application was declined.`, 'system');
                                 }}
                                 className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs border border-rose-200 cursor-pointer"
                               >
@@ -621,6 +625,37 @@ export const AdminDashboard: React.FC = () => {
                             </>
                           ) : (
                             <>
+                              {/* Admin Direct Activation / Deactivation Toggle */}
+                              <button
+                                onClick={() => {
+                                  const newActive = drv.approvalStatus !== 'approved';
+                                  adminToggleDriverActive(drv.id, newActive);
+                                  addNotification(
+                                    newActive ? 'Driver Activated' : 'Driver Deactivated',
+                                    `${drv.name} is now ${newActive ? 'active (allowed to use app)' : 'deactivated (locked from app)'}.`,
+                                    'system'
+                                  );
+                                }}
+                                className={`px-2.5 py-1 font-bold rounded-xl text-[11px] flex items-center gap-1 shadow-xs cursor-pointer ${
+                                  drv.approvalStatus === 'approved'
+                                    ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                }`}
+                                title="Admin override: Toggle driver active status"
+                              >
+                                {drv.approvalStatus === 'approved' ? (
+                                  <>
+                                    <XCircle className="w-3 h-3 text-amber-700" />
+                                    <span>Deactivate</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="w-3 h-3 text-white" />
+                                    <span>Activate</span>
+                                  </>
+                                )}
+                              </button>
+
                               {isLocked ? (
                                 <button
                                   onClick={() => {
@@ -630,7 +665,7 @@ export const AdminDashboard: React.FC = () => {
                                   className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
                                   title="Mark fee paid and unlock driver application"
                                 >
-                                  <CheckCircle2 className="w-3 h-3" /> Unlock App
+                                  <CheckCircle2 className="w-3 h-3" /> Unlock Fee
                                 </button>
                               ) : (
                                 <button
@@ -644,6 +679,20 @@ export const AdminDashboard: React.FC = () => {
                                   Impose Fee (₹{standardFee})
                                 </button>
                               )}
+
+                              {/* Delete Driver */}
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Delete driver partner ${drv.name}? This cannot be undone.`)) {
+                                    adminDeleteDriver(drv.id);
+                                    addNotification('Driver Removed', `${drv.name} has been removed from platform.`, 'system');
+                                  }
+                                }}
+                                className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                title="Delete Driver Profile"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
                             </>
                           )}
                         </div>

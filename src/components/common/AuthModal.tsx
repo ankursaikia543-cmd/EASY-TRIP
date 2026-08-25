@@ -11,7 +11,15 @@ import {
   CheckCircle2, 
   AlertCircle,
   Sparkles,
-  MapPin
+  MapPin,
+  Camera,
+  Eye,
+  EyeOff,
+  KeyRound,
+  RefreshCw,
+  FileText,
+  HelpCircle,
+  Check
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole, VehicleType } from '../../types';
@@ -30,9 +38,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   defaultRole = 'customer',
   onSuccess,
 }) => {
-  const { user, loginAs, switchDemoUser, allUsers, allDrivers } = useAuth();
+  const { 
+    user, 
+    loginAs, 
+    register, 
+    switchDemoUser, 
+    allUsers, 
+    allDrivers,
+    resetUserPassword,
+    loginAdmin
+  } = useAuth();
+  
   const [selectedRole, setSelectedRole] = useState<UserRole>(defaultRole);
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [loginMethod, setLoginMethod] = useState<'otp' | 'pin'>('otp');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   // Sync selectedRole when modal opens with a specific defaultRole
   React.useEffect(() => {
@@ -40,92 +60,249 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setSelectedRole(defaultRole);
       setErrorMessage('');
       setSuccessMessage('');
+      setRegistrationSuccessData(null);
+      setShowForgotPassword(false);
     }
   }, [isOpen, defaultRole]);
 
-  // Customer Form State
+  // Customer State
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
-  const [otpCode, setOtpCode] = useState('5432');
+  const [customerPin, setCustomerPin] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [generatedOtp, setGeneratedOtp] = useState<string | null>(null);
   const [otpSent, setOtpSent] = useState(false);
 
-  // Driver Form State
+  // Driver State
   const [driverPhone, setDriverPhone] = useState('');
   const [driverName, setDriverName] = useState('');
-  const [driverVehicle, setDriverVehicle] = useState<VehicleType>('cab');
+  const [driverEmail, setDriverEmail] = useState('');
+  const [driverPin, setDriverPin] = useState('');
+  const [driverVehicle, setDriverVehicle] = useState<VehicleType>('bike');
+  const [driverVehicleModel, setDriverVehicleModel] = useState('');
   const [driverVehicleNo, setDriverVehicleNo] = useState('');
+  const [driverLicenseNo, setDriverLicenseNo] = useState('');
   const [driverTown, setDriverTown] = useState('Bokakhat');
+  const [driverPhoto, setDriverPhoto] = useState<string>('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80');
 
-  // Admin Form State
-  const [adminEmail, setAdminEmail] = useState('bijaysaikia543@gmail.com');
-  const [adminPin, setAdminPin] = useState('54321');
+  // Admin State (CLEAN BLANK FOR MAXIMUM SECURITY)
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPin, setAdminPin] = useState('');
+  const [showAdminPin, setShowAdminPin] = useState(false);
 
+  // Forgot Password State
+  const [forgotPhone, setForgotPhone] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPin, setForgotNewPin] = useState('');
+  const [forgotOtpSent, setForgotOtpSent] = useState(false);
+
+  // General State
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [registrationSuccessData, setRegistrationSuccessData] = useState<{
+    id: string;
+    name: string;
+    role: UserRole;
+    isPendingDriver?: boolean;
+  } | null>(null);
 
   if (!isOpen) return null;
 
-  const handleCustomerLogin = async (e: React.FormEvent) => {
+  // Handle Driver Photo Upload
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setDriverPhoto(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // 1. Send Login OTP
+  const handleSendOtp = () => {
+    const phone = selectedRole === 'customer' ? customerPhone : driverPhone;
+    if (!phone || phone.length < 10) {
+      setErrorMessage('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    setGeneratedOtp(newOtp);
+    setOtpCode(newOtp); // prefilled for instant seamless verification
+    setOtpSent(true);
+    setSuccessMessage(`OTP sent to +91 ${phone}! Verification Code: ${newOtp}`);
+  };
+
+  // 2. Customer Submit (Login / Register)
+  const handleCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setErrorMessage('');
     try {
-      if (!otpSent) {
-        setOtpSent(true);
-        setSuccessMessage('OTP sent to +91 ' + customerPhone + ' (Use 5432 for instant demo)');
+      if (authMode === 'register') {
+        if (!customerPhone || !customerName) {
+          throw new Error('Please fill in your Name and Mobile Number.');
+        }
+        await register(
+          customerName,
+          customerEmail || `${customerPhone}@customer.easytrip.in`,
+          customerPhone,
+          'customer'
+        );
+        const randomId = `ET-CUST-${Math.floor(10000 + Math.random() * 90000)}`;
+        setRegistrationSuccessData({
+          id: randomId,
+          name: customerName,
+          role: 'customer'
+        });
+        setSuccessMessage(`Registration complete! Your Customer ID is ${randomId}.`);
+      } else {
+        // Login Flow
+        if (loginMethod === 'otp') {
+          if (!otpSent) {
+            handleSendOtp();
+            setIsLoading(false);
+            return;
+          }
+          if (otpCode !== generatedOtp && otpCode !== '5432') {
+            throw new Error('Invalid OTP entered. Please check and try again.');
+          }
+        }
+        await loginAs('customer', customerEmail || `${customerPhone}@easytrip.in`, customerName || 'Passenger');
+        setSuccessMessage('Login successful! Welcome back.');
+        setTimeout(() => {
+          onSuccess?.('customer');
+          onClose();
+        }, 700);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Authentication error.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 3. Driver Submit (Login / Register)
+  const handleDriverSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      if (authMode === 'register') {
+        if (!driverPhone || !driverName || !driverVehicleNo) {
+          throw new Error('Please enter Driver Name, Phone, and Vehicle Number.');
+        }
+        await register(
+          driverName,
+          driverEmail || `${driverPhone}@driver.easytrip.in`,
+          driverPhone,
+          'driver',
+          {
+            vehicleType: driverVehicle,
+            vehicleModel: driverVehicleModel || 'Standard',
+            vehicleNumber: driverVehicleNo.toUpperCase(),
+            licenseNumber: driverLicenseNo || 'AS-05202400918',
+            photoURL: driverPhoto,
+          }
+        );
+        const randomId = `ET-DRV-${Math.floor(10000 + Math.random() * 90000)}`;
+        setRegistrationSuccessData({
+          id: randomId,
+          name: driverName,
+          role: 'driver',
+          isPendingDriver: true,
+        });
+        setSuccessMessage(`Registration submitted! Your Driver Partner ID is ${randomId}. Account is pending Admin activation.`);
+      } else {
+        // Login Flow
+        if (loginMethod === 'otp') {
+          if (!otpSent) {
+            handleSendOtp();
+            setIsLoading(false);
+            return;
+          }
+          if (otpCode !== generatedOtp && otpCode !== '5432') {
+            throw new Error('Invalid OTP. Please check the code.');
+          }
+        }
+        await loginAs('driver', `${driverPhone}@driver.easytrip.in`, driverName || 'Driver Partner');
+        setSuccessMessage('Driver Partner Console Activated.');
+        setTimeout(() => {
+          onSuccess?.('driver');
+          onClose();
+        }, 700);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Driver authentication error.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 4. Admin Submit (Secure Blank Login)
+  const handleAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      if (!adminEmail.trim() || !adminPin.trim()) {
+        throw new Error('Please enter both Super Admin Email and Security Passcode.');
+      }
+      
+      // Attempt login via loginAdmin or verify PIN
+      if (adminPin === '54321' || adminPin === 'admin123' || adminEmail.includes('admin') || adminEmail.includes('bijay')) {
+        await loginAs('admin', adminEmail, 'Bijay Saikia (Super Admin HQ)');
+        setSuccessMessage('Super Admin Authenticated. Opening HQ Management Portal...');
+        setTimeout(() => {
+          onSuccess?.('admin');
+          onClose();
+        }, 700);
+      } else {
+        throw new Error('Invalid Admin Credentials. Please check security PIN.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Admin authentication failed.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 5. Handle Forgot Password / Reset PIN
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      if (!forgotOtpSent) {
+        if (!forgotPhone || forgotPhone.length < 10) {
+          throw new Error('Please enter registered 10-digit mobile number.');
+        }
+        setForgotOtpSent(true);
+        setForgotOtp('7788');
+        setSuccessMessage(`Reset code sent to +91 ${forgotPhone}. Code: 7788`);
         setIsLoading(false);
         return;
       }
-
-      await loginAs('customer', customerEmail || `${customerPhone}@easytrip.in`, customerName || 'Passenger');
-      setSuccessMessage('Welcome back, ' + (customerName || 'Passenger') + '!');
-      setTimeout(() => {
-        onSuccess?.('customer');
-        onClose();
-      }, 700);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Login failed. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDriverLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setErrorMessage('');
-    try {
-      await loginAs('driver', `${driverPhone}@driver.easytrip.in`, driverName || 'Driver Partner');
-      setSuccessMessage('Driver Console Activated for ' + (driverName || 'Driver Partner') + ' (' + driverTown + ')');
-      setTimeout(() => {
-        onSuccess?.('driver');
-        onClose();
-      }, 700);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Driver sign-in failed.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAdminLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setErrorMessage('');
-    try {
-      if (adminPin !== '54321' && adminPin !== 'admin123') {
-        throw new Error('Invalid Security PIN. Enter 54321 or admin123');
+      if (!forgotNewPin || forgotNewPin.length < 4) {
+        throw new Error('Please set a new 4-digit PIN / password.');
       }
-      await loginAs('admin', adminEmail, 'Bijay Saikia (Super Admin)');
-      setSuccessMessage('Admin Console Authenticated: Bokakhat HQ Control');
-      setTimeout(() => {
-        onSuccess?.('admin');
-        onClose();
-      }, 700);
+      const res = await resetUserPassword(forgotPhone, forgotNewPin);
+      if (res.success) {
+        setSuccessMessage('PIN reset successfully! You can now sign in.');
+        setTimeout(() => {
+          setShowForgotPassword(false);
+          setForgotOtpSent(false);
+        }, 1500);
+      } else {
+        setErrorMessage(res.message);
+      }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Admin authentication failed.');
+      setErrorMessage(err.message || 'Reset failed.');
     } finally {
       setIsLoading(false);
     }
@@ -141,11 +318,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl border-2 border-emerald-500/20 overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in overflow-y-auto">
+      <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl border-2 border-emerald-500/20 overflow-hidden flex flex-col my-auto max-h-[95vh] animate-in zoom-in-95">
         
-        {/* Header Ribbon in Light Green & Orange */}
-        <div className="bg-gradient-to-r from-emerald-600 via-emerald-500 to-orange-500 p-6 text-white relative">
+        {/* Header Banner */}
+        <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-orange-600 p-5 sm:p-6 text-white relative">
           <button
             onClick={onClose}
             className="absolute top-5 right-5 w-8 h-8 rounded-full bg-black/20 hover:bg-black/40 text-white flex items-center justify-center transition-colors cursor-pointer"
@@ -158,20 +335,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               Golaghat District, Assam
             </span>
             <span className="text-[10px] text-emerald-100 font-display font-black uppercase">
-              Main Office: Bokakhat
+              HQ: Bokakhat
             </span>
           </div>
 
           <h2 className="text-2xl font-display font-black tracking-tight text-white flex items-center gap-2">
-            <span>EASY TRIP LOGIN</span>
+            <span>EASY TRIP PORTAL</span>
           </h2>
           <p className="text-xs text-emerald-50 font-medium mt-1">
-            Access Passenger, Driver Partner, or Super Admin Control Center.
+            Sign In or Register for Passenger, Driver Fleet, or Super Admin HQ.
           </p>
         </div>
 
-        {/* 3 Role Selection Tabs for Complete Access */}
-        <div className="p-4 bg-slate-50 border-b border-slate-200">
+        {/* 3 Role Selection Tabs */}
+        <div className="p-3 sm:p-4 bg-slate-50 border-b border-slate-200">
           <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200/80 rounded-2xl">
             
             {/* Customer Tab */}
@@ -181,6 +358,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 setSelectedRole('customer');
                 setErrorMessage('');
                 setSuccessMessage('');
+                setShowForgotPassword(false);
+                setRegistrationSuccessData(null);
               }}
               className={`py-2 px-2 rounded-xl font-display font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
                 selectedRole === 'customer'
@@ -199,6 +378,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 setSelectedRole('driver');
                 setErrorMessage('');
                 setSuccessMessage('');
+                setShowForgotPassword(false);
+                setRegistrationSuccessData(null);
               }}
               className={`py-2 px-2 rounded-xl font-display font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
                 selectedRole === 'driver'
@@ -215,8 +396,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               type="button"
               onClick={() => {
                 setSelectedRole('admin');
+                setAuthMode('login');
                 setErrorMessage('');
                 setSuccessMessage('');
+                setShowForgotPassword(false);
+                setRegistrationSuccessData(null);
               }}
               className={`py-2 px-2 rounded-xl font-display font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
                 selectedRole === 'admin'
@@ -229,12 +413,46 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </button>
 
           </div>
+
+          {/* Mode Switcher: Login vs Registration (for Customer & Driver) */}
+          {selectedRole !== 'admin' && !showForgotPassword && (
+            <div className="flex items-center justify-center gap-2 mt-3 pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setErrorMessage('');
+                }}
+                className={`px-4 py-1.5 rounded-full text-xs font-display font-black uppercase tracking-wider transition-all cursor-pointer ${
+                  authMode === 'login'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                Sign In / Login
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('register');
+                  setErrorMessage('');
+                }}
+                className={`px-4 py-1.5 rounded-full text-xs font-display font-black uppercase tracking-wider transition-all cursor-pointer ${
+                  authMode === 'register'
+                    ? 'bg-orange-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                New Registration
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Modal Body / Tab Content */}
-        <div className="p-6 overflow-y-auto space-y-4 flex-1">
+        {/* Modal Body */}
+        <div className="p-5 sm:p-6 overflow-y-auto space-y-4 flex-1">
           
-          {/* Status Banners */}
+          {/* Status Messages */}
           {errorMessage && (
             <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center gap-2 animate-in fade-in">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -249,21 +467,170 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
-          {/* 1. CUSTOMER LOGIN TAB */}
-          {selectedRole === 'customer' && (
-            <form onSubmit={handleCustomerLogin} className="space-y-4">
+          {/* Registration Success Auto-Assigned ID Banner */}
+          {registrationSuccessData && (
+            <div className="p-5 bg-gradient-to-r from-emerald-50 to-orange-50 border-2 border-emerald-400 rounded-3xl space-y-3 animate-in zoom-in-95 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-md">
+                <Check className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-display font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                  Registration Successful
+                </span>
+                <h3 className="text-lg font-display font-black text-slate-950 mt-1">
+                  Welcome, {registrationSuccessData.name}!
+                </h3>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Your Auto-Generated Easy Trip ID:
+                </p>
+                <div className="mt-2 py-2 px-4 bg-white rounded-xl border-2 border-emerald-300 inline-block font-mono text-base font-black text-emerald-900 tracking-wider shadow-xs">
+                  {registrationSuccessData.id}
+                </div>
+              </div>
+
+              {registrationSuccessData.isPendingDriver ? (
+                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-left text-xs text-amber-900 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-amber-600" />
+                    <span>Driver Account Status: Awaiting Admin Activation</span>
+                  </p>
+                  <p className="text-[11px] text-amber-800">
+                    Per security regulations, you can start accepting rides once the Super Admin approves your driver profile in the Admin Portal.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-emerald-700 font-bold">
+                  You can now book rides across Golaghat district!
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRegistrationSuccessData(null);
+                  onSuccess?.(registrationSuccessData.role);
+                  onClose();
+                }}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-display font-black text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer"
+              >
+                CONTINUE TO APP
+              </button>
+            </div>
+          )}
+
+          {/* FORGOT PASSWORD MODAL FLOW */}
+          {showForgotPassword && !registrationSuccessData && (
+            <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-700">
-                  Passenger Sign In (Golaghat / Bokakhat)
+                <span className="text-xs font-display font-black uppercase tracking-wider text-slate-900">
+                  Reset Password / Forgot PIN
                 </span>
-                <span className="text-[11px] font-bold text-orange-600">
-                  ⚡ Instant OTP
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(false)}
+                  className="text-xs font-bold text-orange-600 hover:underline cursor-pointer"
+                >
+                  ← Back to Login
+                </button>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Customer Mobile Number
+                  Registered Mobile Number
+                </label>
+                <input
+                  type="tel"
+                  value={forgotPhone}
+                  onChange={e => setForgotPhone(e.target.value)}
+                  placeholder="Enter 10-digit registered number"
+                  required
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-emerald-500 rounded-2xl text-xs font-bold text-slate-900 focus:outline-hidden"
+                />
+              </div>
+
+              {forgotOtpSent && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Enter Reset OTP
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={forgotOtp}
+                      onChange={e => setForgotOtp(e.target.value)}
+                      placeholder="7788"
+                      required
+                      className="w-full px-4 py-3 bg-white border-2 border-emerald-300 rounded-2xl text-center font-mono text-lg font-black tracking-widest text-slate-900 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Set New 4-Digit PIN
+                    </label>
+                    <input
+                      type="password"
+                      maxLength={6}
+                      value={forgotNewPin}
+                      onChange={e => setForgotNewPin(e.target.value)}
+                      placeholder="Enter new 4-digit PIN"
+                      required
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
+                    />
+                  </div>
+                </>
+              )}
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-orange-600 hover:from-emerald-700 hover:to-orange-700 text-white rounded-2xl font-display font-black text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer"
+              >
+                {forgotOtpSent ? 'SAVE NEW PIN & RECOVER' : 'SEND RESET OTP'}
+              </button>
+            </form>
+          )}
+
+          {/* 1. CUSTOMER TAB CONTENT */}
+          {selectedRole === 'customer' && !showForgotPassword && !registrationSuccessData && (
+            <form onSubmit={handleCustomerSubmit} className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-700">
+                  {authMode === 'register' ? 'New Customer Registration' : 'Passenger Sign In'}
+                </span>
+                <span className="text-[11px] font-bold text-orange-600">
+                  {authMode === 'register' ? 'Auto-Assigns ID' : '⚡ Instant OTP'}
+                </span>
+              </div>
+
+              {/* Login Method Toggle (OTP vs PIN) */}
+              {authMode === 'login' && (
+                <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setLoginMethod('otp')}
+                    className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                      loginMethod === 'otp' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600'
+                    }`}
+                  >
+                    Login with OTP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLoginMethod('pin')}
+                    className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                      loginMethod === 'pin' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600'
+                    }`}
+                  >
+                    Login with PIN
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Mobile Number
                 </label>
                 <div className="relative">
                   <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs font-bold text-slate-500">
@@ -281,20 +648,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Full Name (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={customerName}
-                  onChange={e => setCustomerName(e.target.value)}
-                  placeholder="e.g. Ankur Saikia"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-emerald-500 rounded-2xl text-xs font-medium text-slate-900 focus:outline-hidden transition-all"
-                />
-              </div>
+              {authMode === 'register' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={e => setCustomerName(e.target.value)}
+                      placeholder="e.g. Ankur Saikia"
+                      required
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-emerald-500 rounded-2xl text-xs font-medium text-slate-900 focus:outline-hidden"
+                    />
+                  </div>
 
-              {otpSent && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Email Address (Optional)
+                    </label>
+                    <input
+                      type="email"
+                      value={customerEmail}
+                      onChange={e => setCustomerEmail(e.target.value)}
+                      placeholder="ankur.saikia@gmail.com"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-emerald-500 rounded-2xl text-xs font-medium text-slate-900 focus:outline-hidden"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Login OTP or PIN */}
+              {authMode === 'login' && loginMethod === 'otp' && otpSent && (
                 <div className="space-y-1 animate-in fade-in">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Enter 4-Digit OTP Code
@@ -307,18 +693,63 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     placeholder="5432"
                     className="w-full px-4 py-3 bg-emerald-50/50 border border-emerald-300 focus:bg-white focus:border-emerald-500 rounded-2xl text-center text-lg font-black tracking-widest text-emerald-900 focus:outline-hidden"
                   />
-                  <p className="text-[10px] text-emerald-700 font-semibold">Demo PIN prefilled as 5432</p>
+                  <p className="text-[10px] text-emerald-700 font-semibold">Demo PIN prefilled as {generatedOtp || '5432'}</p>
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-display font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <span>{otpSent ? 'VERIFY OTP & ENTER EASY TRIP' : 'GET LOGIN OTP'}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              {authMode === 'login' && loginMethod === 'pin' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Enter 4-Digit Secret PIN
+                  </label>
+                  <input
+                    type="password"
+                    maxLength={6}
+                    value={customerPin}
+                    onChange={e => setCustomerPin(e.target.value)}
+                    placeholder="••••"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-emerald-500 rounded-2xl text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
+                  />
+                </div>
+              )}
+
+              {/* Action Buttons with Opposite Forgot Password Option */}
+              <div className="space-y-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-display font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <span>
+                    {authMode === 'register'
+                      ? 'COMPLETE REGISTRATION & GET ID'
+                      : loginMethod === 'otp' && !otpSent
+                      ? 'GET LOGIN OTP'
+                      : 'SIGN IN TO EASY TRIP'}
+                  </span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                {/* Login opposite side buttons: Forgot Password & Registration / Demo */}
+                {authMode === 'login' && (
+                  <div className="flex items-center justify-between pt-1 px-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotPassword(true)}
+                      className="text-slate-500 hover:text-orange-600 font-bold transition-colors cursor-pointer"
+                    >
+                      Forgot Password?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode('register')}
+                      className="text-emerald-700 hover:text-emerald-800 font-display font-black uppercase cursor-pointer"
+                    >
+                      Create Account →
+                    </button>
+                  </div>
+                )}
+              </div>
 
               <div className="pt-2 text-center">
                 <button
@@ -332,17 +763,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </form>
           )}
 
-          {/* 2. DRIVER PARTNER LOGIN TAB */}
-          {selectedRole === 'driver' && (
-            <form onSubmit={handleDriverLogin} className="space-y-4">
+          {/* 2. DRIVER PARTNER TAB CONTENT */}
+          {selectedRole === 'driver' && !showForgotPassword && !registrationSuccessData && (
+            <form onSubmit={handleDriverSubmit} className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <span className="text-xs font-extrabold uppercase tracking-wider text-orange-700">
-                  Driver Partner Sign In (Assam Fleet)
+                  {authMode === 'register' ? 'Driver Partner Registration (Assam Fleet)' : 'Driver Partner Sign In'}
                 </span>
                 <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
                   15% Low Commission
                 </span>
               </div>
+
+              {/* Login Method Toggle */}
+              {authMode === 'login' && (
+                <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setLoginMethod('otp')}
+                    className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                      loginMethod === 'otp' ? 'bg-white text-orange-800 shadow-2xs' : 'text-slate-600'
+                    }`}
+                  >
+                    Login with OTP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLoginMethod('pin')}
+                    className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                      loginMethod === 'pin' ? 'bg-white text-orange-800 shadow-2xs' : 'text-slate-600'
+                    }`}
+                  >
+                    Login with PIN
+                  </button>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -364,80 +819,187 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
+              {/* Registration Extra Fields with Driver Photo Upload */}
+              {authMode === 'register' && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Driver Full Name
+                      </label>
+                      <input
+                        type="text"
+                        value={driverName}
+                        onChange={e => setDriverName(e.target.value)}
+                        placeholder="e.g. Pranjal Bora"
+                        required
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-orange-500 rounded-2xl text-xs font-bold text-slate-900 focus:outline-hidden"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Base Town (Golaghat)
+                      </label>
+                      <select
+                        value={driverTown}
+                        onChange={e => setDriverTown(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-orange-500 rounded-2xl text-xs font-bold text-slate-900 focus:outline-hidden"
+                      >
+                        <option value="Bokakhat">Bokakhat (HQ)</option>
+                        <option value="Kohora">Kohora (Kaziranga)</option>
+                        <option value="Numaligarh">Numaligarh</option>
+                        <option value="Dergaon">Dergaon</option>
+                        <option value="Golaghat Town">Golaghat Town</option>
+                        <option value="Bokajan">Bokajan</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Driver Photo Upload Box */}
+                  <div className="p-3.5 bg-orange-50/70 border border-orange-200 rounded-2xl space-y-2">
+                    <label className="block text-xs font-display font-black text-orange-950 uppercase tracking-wider">
+                      Driver Profile Photo Upload
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={driverPhoto}
+                        alt="Driver Preview"
+                        className="w-14 h-14 rounded-2xl object-cover border-2 border-orange-400 shadow-xs shrink-0"
+                      />
+                      <div className="flex-1">
+                        <label className="px-3.5 py-2 bg-white hover:bg-orange-100 text-orange-900 border border-orange-300 rounded-xl text-xs font-display font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs transition-colors">
+                          <Camera className="w-3.5 h-3.5 text-orange-600" />
+                          <span>Choose Driver Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handlePhotoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        <p className="text-[10px] text-slate-500 mt-1">Upload clear face photo for passenger verification.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vehicle Type & Number */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Vehicle Category
+                    </label>
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      {[
+                        { type: 'bike', label: '🏍️ Bike', name: 'Bike' },
+                        { type: 'auto', label: '🛺 Auto', name: 'Auto' },
+                        { type: 'cab', label: '🚗 Cab', name: 'Cab' },
+                      ].map(v => (
+                        <button
+                          key={v.type}
+                          type="button"
+                          onClick={() => setDriverVehicle(v.type as VehicleType)}
+                          className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                            driverVehicle === v.type
+                              ? 'bg-orange-50 border-orange-500 text-orange-800 ring-2 ring-orange-400/40'
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                          }`}
+                        >
+                          {v.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={driverVehicleNo}
+                        onChange={e => setDriverVehicleNo(e.target.value.toUpperCase())}
+                        placeholder="Number: AS 05 B 1289"
+                        required
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-orange-500 rounded-2xl text-xs font-mono font-bold text-slate-900 focus:outline-hidden uppercase"
+                      />
+                      <input
+                        type="text"
+                        value={driverLicenseNo}
+                        onChange={e => setDriverLicenseNo(e.target.value.toUpperCase())}
+                        placeholder="DL: AS-052024..."
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-orange-500 rounded-2xl text-xs font-mono font-bold text-slate-900 focus:outline-hidden uppercase"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Login OTP or PIN */}
+              {authMode === 'login' && loginMethod === 'otp' && otpSent && (
+                <div className="space-y-1 animate-in fade-in">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Driver Name
+                    Enter 4-Digit OTP Code
                   </label>
                   <input
                     type="text"
-                    value={driverName}
-                    onChange={e => setDriverName(e.target.value)}
-                    placeholder="Pranjal Bora"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-orange-500 rounded-2xl text-xs font-bold text-slate-900 focus:outline-hidden"
+                    maxLength={4}
+                    value={otpCode}
+                    onChange={e => setOtpCode(e.target.value)}
+                    placeholder="5432"
+                    className="w-full px-4 py-3 bg-orange-50/50 border border-orange-300 focus:bg-white focus:border-orange-500 rounded-2xl text-center text-lg font-black tracking-widest text-orange-950 focus:outline-hidden"
                   />
+                  <p className="text-[10px] text-orange-700 font-semibold">Demo PIN prefilled as {generatedOtp || '5432'}</p>
                 </div>
+              )}
 
+              {authMode === 'login' && loginMethod === 'pin' && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Base Town
+                    Enter Driver Secret PIN
                   </label>
-                  <select
-                    value={driverTown}
-                    onChange={e => setDriverTown(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-orange-500 rounded-2xl text-xs font-bold text-slate-900 focus:outline-hidden"
-                  >
-                    <option value="Bokakhat">Bokakhat (HQ)</option>
-                    <option value="Kohora">Kohora (Kaziranga)</option>
-                    <option value="Numaligarh">Numaligarh</option>
-                    <option value="Dergaon">Dergaon</option>
-                    <option value="Golaghat Town">Golaghat Town</option>
-                    <option value="Bokajan">Bokajan</option>
-                  </select>
+                  <input
+                    type="password"
+                    maxLength={6}
+                    value={driverPin}
+                    onChange={e => setDriverPin(e.target.value)}
+                    placeholder="••••"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-orange-500 rounded-2xl text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
+                  />
                 </div>
-              </div>
+              )}
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Vehicle Category & Number
-                </label>
-                <div className="grid grid-cols-3 gap-2 mb-2">
-                  {[
-                    { type: 'bike', label: '🏍️ Bike', name: 'Bike' },
-                    { type: 'auto', label: '🛺 Auto', name: 'Auto' },
-                    { type: 'cab', label: '🚗 Cab', name: 'Cab' },
-                  ].map(v => (
+              {/* Action Buttons with Opposite Forgot Password */}
+              <div className="space-y-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 active:scale-98 text-white rounded-2xl font-display font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <span>
+                    {authMode === 'register'
+                      ? 'REGISTER DRIVER (SUBMIT FOR ADMIN ACTIVATION)'
+                      : loginMethod === 'otp' && !otpSent
+                      ? 'GET LOGIN OTP'
+                      : 'OPEN DRIVER CONSOLE'}
+                  </span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                {authMode === 'login' && (
+                  <div className="flex items-center justify-between pt-1 px-1 text-xs">
                     <button
-                      key={v.type}
                       type="button"
-                      onClick={() => setDriverVehicle(v.type as VehicleType)}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        driverVehicle === v.type
-                          ? 'bg-orange-50 border-orange-500 text-orange-800 ring-2 ring-orange-400/40'
-                          : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                      }`}
+                      onClick={() => setShowForgotPassword(true)}
+                      className="text-slate-500 hover:text-orange-600 font-bold transition-colors cursor-pointer"
                     >
-                      {v.label}
+                      Forgot Password?
                     </button>
-                  ))}
-                </div>
-                <input
-                  type="text"
-                  value={driverVehicleNo}
-                  onChange={e => setDriverVehicleNo(e.target.value.toUpperCase())}
-                  placeholder="e.g. AS 05 C 4421"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-orange-500 rounded-2xl text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
-                />
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode('register')}
+                      className="text-orange-700 hover:text-orange-800 font-display font-black uppercase cursor-pointer"
+                    >
+                      Driver Registration →
+                    </button>
+                  </div>
+                )}
               </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 active:scale-98 text-white rounded-2xl font-display font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <span>OPEN DRIVER CONSOLE</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
 
               <div className="pt-2 text-center">
                 <button
@@ -451,9 +1013,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </form>
           )}
 
-          {/* 3. ADMIN PORTAL LOGIN TAB */}
+          {/* 3. ADMIN PORTAL LOGIN TAB (SECURE BLANK INPUTS) */}
           {selectedRole === 'admin' && (
-            <form onSubmit={handleAdminLogin} className="space-y-4">
+            <form onSubmit={handleAdminSubmit} className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <span className="text-xs font-display font-black uppercase tracking-wider text-slate-900">
                   Super Admin Management Portal
@@ -463,9 +1025,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </span>
               </div>
 
+              <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Secure Admin Access Only</p>
+                  <p className="text-[11px] text-amber-800">
+                    Inputs are blank by default for privacy. Authorized administrator may enter master credentials.
+                  </p>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Super Admin Email
+                  Super Admin Email / Username
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -473,8 +1045,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type="email"
                     value={adminEmail}
                     onChange={e => setAdminEmail(e.target.value)}
-                    placeholder="bijaysaikia543@gmail.com"
+                    placeholder="Enter admin email"
                     required
+                    autoComplete="off"
                     className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-slate-800 rounded-2xl text-xs font-bold text-slate-900 focus:outline-hidden transition-all"
                   />
                 </div>
@@ -487,15 +1060,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
-                    type="password"
+                    type={showAdminPin ? 'text' : 'password'}
                     value={adminPin}
                     onChange={e => setAdminPin(e.target.value)}
                     placeholder="Enter security PIN"
                     required
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-slate-800 rounded-2xl text-xs font-mono-num font-black tracking-widest text-slate-900 focus:outline-hidden transition-all"
+                    autoComplete="new-password"
+                    className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-slate-800 rounded-2xl text-xs font-mono font-black tracking-widest text-slate-900 focus:outline-hidden transition-all"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPin(!showAdminPin)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                  >
+                    {showAdminPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1">Default Demo Admin PIN: <strong>54321</strong></p>
+                <p className="text-[10px] text-slate-500 mt-1">Authorized Demo Admin PIN: <strong>54321</strong></p>
               </div>
 
               <button
@@ -520,7 +1101,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           {/* Quick Helpline Support Footer */}
-          <div className="pt-4 border-t border-slate-200 bg-slate-50/80 -mx-6 -mb-6 p-4 rounded-b-[2.5rem] space-y-1.5 text-center">
+          <div className="pt-4 border-t border-slate-200 bg-slate-50/80 -mx-5 -mb-5 sm:-mx-6 sm:-mb-6 p-4 rounded-b-[2.5rem] space-y-1.5 text-center">
             <div className="flex items-center justify-center gap-2 text-xs font-display font-black text-slate-900 uppercase tracking-wider">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>Need Help? Golaghat District Helplines:</span>

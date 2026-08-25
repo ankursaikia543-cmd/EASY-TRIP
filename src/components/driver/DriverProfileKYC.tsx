@@ -8,7 +8,9 @@ import {
   Upload, 
   ShieldCheck, 
   AlertCircle, 
-  Save 
+  Save,
+  Camera,
+  UserCheck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -20,18 +22,33 @@ export const DriverProfileKYC: React.FC = () => {
 
   const [name, setName] = useState(driverProfile?.name || '');
   const [phone, setPhone] = useState(driverProfile?.phone || '');
+  const [photoURL, setPhotoURL] = useState(driverProfile?.photoURL || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80');
   const [vehicleType, setVehicleType] = useState<VehicleType>(driverProfile?.vehicleType || 'auto');
   const [vehicleBrand, setVehicleBrand] = useState(driverProfile?.vehicleBrand || 'Bajaj');
   const [vehicleModel, setVehicleModel] = useState(driverProfile?.vehicleModel || 'Compact 4S');
-  const [vehicleNumber, setVehicleNumber] = useState(driverProfile?.vehicleNumber || 'DL 01 AB 7890');
-  const [licenseNumber, setLicenseNumber] = useState(driverProfile?.licenseNumber || 'DL-042019001234');
+  const [vehicleNumber, setVehicleNumber] = useState(driverProfile?.vehicleNumber || 'AS 05 AB 7890');
+  const [licenseNumber, setLicenseNumber] = useState(driverProfile?.licenseNumber || 'AS-052024001234');
   const [isSaved, setIsSaved] = useState(false);
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setPhotoURL(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     updateDriverProfile({
       name,
       phone,
+      photoURL,
       vehicleType,
       vehicleBrand,
       vehicleModel,
@@ -39,7 +56,7 @@ export const DriverProfileKYC: React.FC = () => {
       licenseNumber,
     });
     setIsSaved(true);
-    addNotification('Driver Profile Saved', 'Vehicle and contact credentials updated.', 'system');
+    addNotification('Driver Profile Saved', 'Photo, vehicle, and contact credentials updated.', 'system');
     setTimeout(() => setIsSaved(false), 3000);
   };
 
@@ -53,7 +70,7 @@ export const DriverProfileKYC: React.FC = () => {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Driver Partner KYC & Vehicle</h1>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Verified credentials for Government compliance and road safety.
+            Verified credentials for Government compliance and passenger safety in Golaghat.
           </p>
         </div>
 
@@ -72,19 +89,58 @@ export const DriverProfileKYC: React.FC = () => {
 
       <form onSubmit={handleSave} className="space-y-6">
         
-        {/* Driver Personal & Contact Information */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
-          <h3 className="font-extrabold text-sm text-slate-900">Personal Details</h3>
+        {/* Driver Photo & Personal Details */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-5">
+          <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+            <UserCheck className="w-4 h-4 text-orange-600" />
+            <span>Driver Identity & Photo</span>
+          </h3>
+
+          {/* Photo Upload Section */}
+          <div className="p-4 bg-orange-50/60 border border-orange-200 rounded-2xl flex flex-col sm:flex-row items-center gap-4">
+            <div className="relative">
+              <img
+                src={photoURL}
+                alt="Driver Profile"
+                className="w-20 h-20 rounded-2xl object-cover border-2 border-orange-500 shadow-md"
+              />
+              <label className="absolute -bottom-2 -right-2 p-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-md cursor-pointer transition-colors">
+                <Camera className="w-3.5 h-3.5" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                />
+              </label>
+            </div>
+            <div className="flex-1 text-center sm:text-left space-y-1">
+              <h4 className="text-xs font-bold text-slate-900">Driver Profile Photo</h4>
+              <p className="text-[11px] text-slate-600">
+                A clear, front-facing passport-style picture will be displayed to customers when accepting booking requests.
+              </p>
+              <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-orange-300 rounded-xl text-xs font-bold text-orange-800 hover:bg-orange-100 cursor-pointer shadow-2xs transition-colors mt-1">
+                <Upload className="w-3.5 h-3.5 text-orange-600" />
+                <span>Upload New Photo</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Driver Name</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Driver Full Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 required
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-hidden"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-hidden"
               />
             </div>
             <div>
@@ -94,7 +150,7 @@ export const DriverProfileKYC: React.FC = () => {
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
                 required
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-hidden"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-hidden"
               />
             </div>
           </div>
