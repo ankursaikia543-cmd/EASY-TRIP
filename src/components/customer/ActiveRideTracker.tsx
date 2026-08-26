@@ -13,7 +13,11 @@ import {
   AlertTriangle,
   RotateCcw,
   Navigation,
-  KeyRound
+  KeyRound,
+  Copy,
+  Check,
+  Zap,
+  Lock
 } from 'lucide-react';
 import { useRide } from '../../context/RideContext';
 import { useAuth } from '../../context/AuthContext';
@@ -22,6 +26,7 @@ import { InteractiveMap } from '../common/InteractiveMap';
 import { ChatModal } from '../common/ChatModal';
 import { SOSModal } from '../common/SOSModal';
 import { PaymentRatingModal } from './PaymentRatingModal';
+import { FareService } from '../../services/fareService';
 
 export const ActiveRideTracker: React.FC = () => {
   const { activeRide, cancelRide } = useRide();
@@ -32,12 +37,30 @@ export const ActiveRideTracker: React.FC = () => {
   const [showSOS, setShowSOS] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('Change of plans');
+  const [copiedOtp, setCopiedOtp] = useState(false);
 
   if (!activeRide) return null;
+
+  // Live Driver Distance from Pickup Point
+  const driverDistanceKm = activeRide.driverLocation
+    ? FareService.calculateDistanceKm(
+        { lat: activeRide.driverLocation.lat, lng: activeRide.driverLocation.lng, address: 'Driver GPS Point' },
+        activeRide.pickup
+      )
+    : 1.2;
+  const driverEtaMin = Math.max(1, Math.round(driverDistanceKm * 2.2));
 
   const handleConfirmCancel = async () => {
     await cancelRide(activeRide.id, cancelReason);
     setShowCancelModal(false);
+  };
+
+  const handleCopyOtp = () => {
+    if (activeRide.otp) {
+      navigator.clipboard.writeText(activeRide.otp);
+      setCopiedOtp(true);
+      setTimeout(() => setCopiedOtp(false), 2000);
+    }
   };
 
   return (
@@ -140,6 +163,32 @@ export const ActiveRideTracker: React.FC = () => {
           {(activeRide.status === 'driver_assigned' || activeRide.status === 'arrived' || activeRide.status === 'in_progress') && (
             <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-5">
               
+              {/* Driver Live Distance & Proximity Banner */}
+              <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 rounded-2xl border border-emerald-300 shadow-xs flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-600"></span>
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-black text-emerald-950 uppercase tracking-wide">
+                      {activeRide.status === 'driver_assigned' ? 'Driver Live Location' : activeRide.status === 'arrived' ? 'Driver Reached Pickup' : 'Trip in Progress'}
+                    </p>
+                    <p className="text-xs font-extrabold text-emerald-800">
+                      {activeRide.status === 'driver_assigned' 
+                        ? `📍 ${driverDistanceKm} km away • Arriving in ~${driverEtaMin} mins` 
+                        : activeRide.status === 'arrived' 
+                        ? 'Driver is parked and waiting for OTP' 
+                        : `En route to ${activeRide.destination.city || 'destination'}`}
+                    </p>
+                  </div>
+                </div>
+                <div className="px-2.5 py-1 bg-white rounded-xl border border-emerald-200 text-[10px] font-black text-emerald-700 flex items-center gap-1 shadow-2xs">
+                  <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
+                  <span>Live GPS</span>
+                </div>
+              </div>
+
               {/* Driver Profile Bar */}
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-3.5">
@@ -168,23 +217,50 @@ export const ActiveRideTracker: React.FC = () => {
                 {/* Vehicle Plate Number Badge */}
                 <div className="text-right">
                   <div className="px-3 py-1.5 bg-yellow-300 border-2 border-slate-900 rounded-lg font-mono font-black text-xs text-slate-950 shadow-xs">
-                    {activeRide.vehicleNumber || 'DL 01 AB 7890'}
+                    {activeRide.vehicleNumber || 'AS 05 AB 7890'}
                   </div>
-                  <span className="text-[10px] text-slate-400 uppercase font-bold mt-1 block">Verified Plate</span>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold mt-1 block">Assam Plate</span>
                 </div>
               </div>
 
-              {/* 4-Digit Ride PIN/OTP Display Box */}
-              <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 text-center space-y-1">
-                <span className="text-[11px] font-bold text-blue-900 uppercase tracking-wider flex items-center justify-center gap-1">
-                  <KeyRound className="w-3.5 h-3.5 text-blue-600" />
-                  Your 4-Digit Ride Start PIN (OTP)
-                </span>
-                <div className="text-3xl font-black tracking-widest text-blue-700 font-mono py-1">
-                  {activeRide.otp}
+              {/* 4-Digit Ride PIN/OTP Display Box (COMPULSORY FOR RIDE START) */}
+              <div className="p-4 bg-gradient-to-br from-amber-500/10 via-orange-500/10 to-amber-500/15 rounded-2xl border-2 border-amber-400 text-center space-y-2 relative overflow-hidden shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5 bg-amber-200/80 px-2.5 py-0.5 rounded-full border border-amber-300">
+                    <Lock className="w-3 h-3 text-amber-800" />
+                    COMPULSORY RIDE START PIN (OTP)
+                  </span>
+                  <button
+                    onClick={handleCopyOtp}
+                    className="text-[11px] font-bold text-amber-800 hover:text-amber-950 flex items-center gap-1 bg-white/90 px-2 py-0.5 rounded-lg border border-amber-300 shadow-2xs transition-colors cursor-pointer"
+                  >
+                    {copiedOtp ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3 text-slate-500" />
+                        <span>Copy PIN</span>
+                      </>
+                    )}
+                  </button>
                 </div>
-                <p className="text-[11px] text-slate-500">
-                  Share this PIN with your driver upon entering to start your trip safely.
+
+                <div className="flex justify-center items-center gap-2 py-1">
+                  {(activeRide.otp || '4829').split('').map((digit, idx) => (
+                    <span 
+                      key={idx}
+                      className="w-12 h-14 bg-white rounded-xl border-2 border-amber-500 flex items-center justify-center font-mono font-black text-2xl text-slate-950 shadow-md"
+                    >
+                      {digit}
+                    </span>
+                  ))}
+                </div>
+
+                <p className="text-[11px] text-amber-950 font-bold bg-white/70 py-1 px-2.5 rounded-lg border border-amber-200/60">
+                  ⚠️ Driver cannot start the trip without entering this 4-digit PIN on their device.
                 </p>
               </div>
 

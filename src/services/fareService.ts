@@ -2,8 +2,8 @@ import { FareCalculationResult, LocationPoint, PlatformSettings, VehicleType, Co
 
 export class FareService {
   /**
-   * Calculates straight-line distance in kilometers using the Haversine formula
-   * Multiplied by a realistic city transit circuity factor of 1.25x for driving distance
+   * Calculates realistic driving road distance in kilometers using known Assam corridors
+   * and high-precision Haversine with road circuity routing factor.
    */
   public static calculateDistanceKm(from: LocationPoint, to: LocationPoint): number {
     if (!from || !to) return 3.5;
@@ -13,6 +13,39 @@ export class FareService {
       return 1.2;
     }
 
+    const fromText = `${from.address || ''} ${from.city || ''}`.toLowerCase();
+    const toText = `${to.address || ''} ${to.city || ''}`.toLowerCase();
+
+    // Check specific known Assam Highway corridors for exact road distance accuracy
+    const matchPair = (k1: string, k2: string) => 
+      (fromText.includes(k1) && toText.includes(k2)) || (fromText.includes(k2) && toText.includes(k1));
+
+    if (matchPair('bokakhat', 'golaghat')) return 48.5;
+    if (matchPair('bokakhat', 'kohora') || matchPair('bokakhat', 'kaziranga')) return 22.4;
+    if (matchPair('bokakhat', 'numaligarh')) return 21.0;
+    if (matchPair('bokakhat', 'dergaon')) return 35.2;
+    if (matchPair('bokakhat', 'jorhat')) return 64.8;
+    if (matchPair('bokakhat', 'guwahati')) return 234.0;
+    if (matchPair('bokakhat', 'dibrugarh')) return 204.0;
+    if (matchPair('bokakhat', 'sarupathar')) return 78.0;
+
+    if (matchPair('golaghat', 'dergaon')) return 26.5;
+    if (matchPair('golaghat', 'jorhat')) return 54.0;
+    if (matchPair('golaghat', 'furkating')) return 11.2;
+    if (matchPair('golaghat', 'sarupathar')) return 55.4;
+    if (matchPair('golaghat', 'barpathar')) return 42.0;
+    if (matchPair('golaghat', 'numaligarh')) return 27.8;
+    if (matchPair('golaghat', 'guwahati')) return 278.0;
+    if (matchPair('golaghat', 'dibrugarh')) return 194.0;
+    if (matchPair('golaghat', 'dimapur')) return 88.5;
+    if (matchPair('golaghat', 'sivasagar')) return 96.0;
+
+    if (matchPair('dergaon', 'jorhat')) return 28.0;
+    if (matchPair('dergaon', 'numaligarh')) return 18.5;
+    if (matchPair('numaligarh', 'morangi')) return 12.4;
+    if (matchPair('numaligarh', 'dergaon')) return 18.5;
+
+    // High-precision Haversine distance with real-world road curvature factor (1.32x for Assam regional topography)
     const R = 6371; // Radius of Earth in km
     const dLat = this.deg2rad(to.lat - from.lat);
     const dLon = this.deg2rad(to.lng - from.lng);
@@ -25,9 +58,9 @@ export class FareService {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const straightDist = R * c;
 
-    // Apply city road circuity routing factor (1.25 - 1.35x)
-    const routedDistance = straightDist * 1.28;
-    return Math.max(1.0, Math.round(routedDistance * 10) / 10);
+    // Apply realistic Assam road routing curvature factor (1.30 - 1.35x)
+    const routedDistance = Math.max(1.2, straightDist * 1.32);
+    return Math.round(routedDistance * 10) / 10;
   }
 
   private static deg2rad(deg: number): number {
@@ -35,17 +68,38 @@ export class FareService {
   }
 
   /**
-   * Estimates driving duration in minutes based on distance and vehicle average city speed
+   * Estimates driving duration in minutes based on real distance and vehicle average city/highway speed
    */
   public static estimateDurationMin(distanceKm: number, vehicleType: VehicleType): number {
-    // Average urban speeds in Indian cities (km/h)
-    let avgSpeed = 24; // Cab
-    if (vehicleType === 'bike') avgSpeed = 32; // Bike weaves through traffic faster
-    if (vehicleType === 'auto') avgSpeed = 22; // Auto average speed
+    // Average realistic speeds on Assam roads & NH-715 (km/h)
+    let avgSpeed = 38; // Cab average
+    if (vehicleType === 'bike') avgSpeed = 42; // Bike navigates village/town traffic faster
+    if (vehicleType === 'auto') avgSpeed = 28; // Auto rickshaw cruising speed
+
+    if (distanceKm > 60) {
+      // Long highway trips maintain slightly higher cruising speed
+      avgSpeed += 6;
+    }
 
     const baseMin = Math.round((distanceKm / avgSpeed) * 60);
-    // Add 3-5 mins for traffic signal delays & pickup buffer
-    return Math.max(5, baseMin + 3);
+    // Buffer for town junctions, traffic lights, and pickup
+    const bufferMin = distanceKm <= 5 ? 3 : distanceKm <= 20 ? 5 : 8;
+    return Math.max(4, baseMin + bufferMin);
+  }
+
+  /**
+   * Formats duration in minutes into a clean human-readable string (e.g., "45 mins" or "1 hr 25 mins")
+   */
+  public static formatDuration(minutes: number): string {
+    if (minutes < 60) {
+      return `${minutes} mins`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const remMin = minutes % 60;
+    if (remMin === 0) {
+      return `${hours} ${hours === 1 ? 'hr' : 'hrs'}`;
+    }
+    return `${hours} ${hours === 1 ? 'hr' : 'hrs'} ${remMin} mins`;
   }
 
   /**
@@ -59,15 +113,15 @@ export class FareService {
     coupon?: Coupon | null
   ): FareCalculationResult {
     const rate = settings.fares[vehicleType] || {
-      baseFare: vehicleType === 'bike' ? 30 : vehicleType === 'auto' ? 40 : 70,
-      pricePerKm: vehicleType === 'bike' ? 10 : vehicleType === 'auto' ? 14 : 18,
-      minimumFare: vehicleType === 'bike' ? 30 : vehicleType === 'auto' ? 40 : 70,
+      baseFare: vehicleType === 'bike' ? 25 : vehicleType === 'auto' ? 35 : 65,
+      pricePerKm: vehicleType === 'bike' ? 9 : vehicleType === 'auto' ? 13 : 17,
+      minimumFare: vehicleType === 'bike' ? 25 : vehicleType === 'auto' ? 35 : 65,
       perMinuteRate: 1.5,
     };
 
     const baseFare = rate.baseFare;
     const distanceFare = Math.round(distanceKm * rate.pricePerKm);
-    const timeFare = Math.round(Math.max(0, durationMin - 10) * rate.perMinuteRate * 0.5); // Minor traffic time buffer
+    const timeFare = Math.round(Math.max(0, durationMin - 15) * (rate.perMinuteRate || 1.0) * 0.4);
     const surgeMultiplier = settings.surgePricingEnabled ? (settings.surgeMultiplier || 1.0) : 1.0;
 
     let subtotal = (baseFare + distanceFare + timeFare) * surgeMultiplier;
@@ -107,3 +161,4 @@ export class FareService {
     };
   }
 }
+

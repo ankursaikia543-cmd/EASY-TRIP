@@ -70,35 +70,139 @@ const NotificationToasts: React.FC = () => {
 
 // Main App Container
 const MainContent: React.FC = () => {
-  const { user } = useAuth();
+  const { user, switchDemoUser } = useAuth();
   const [currentView, setCurrentView] = useState<string>('home');
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
 
+  // Centralized navigation handler ensuring role synchronization
+  const handleNavigate = (view: string) => {
+    // If navigating to a driver view, make sure driver role is active
+    if (
+      view === 'driver' ||
+      view === 'driver-home' ||
+      view === 'driver-earnings' ||
+      view === 'driver-welfare' ||
+      view === 'driver-kyc' ||
+      view === 'driver-rides'
+    ) {
+      if (user?.role !== 'driver') {
+        switchDemoUser('driver');
+      }
+      setCurrentView(view === 'driver' ? 'driver-home' : view);
+      return;
+    }
+
+    // If navigating to customer views from another role
+    if (
+      view === 'customer-home' ||
+      view === 'customer-trips' ||
+      view === 'customer-wallet' ||
+      view === 'customer-profile' ||
+      view === 'customer-support'
+    ) {
+      if (user?.role !== 'customer') {
+        switchDemoUser('customer');
+      }
+      setCurrentView(view);
+      return;
+    }
+
+    // If navigating to admin views
+    if (view === 'admin' || view === 'admin-dashboard') {
+      if (user?.role !== 'admin') {
+        switchDemoUser('admin');
+      }
+      setCurrentView('admin-dashboard');
+      return;
+    }
+
+    setCurrentView(view);
+  };
+
+  // Sync view when role switches (e.g. from DemoModeBanner or AuthModal)
+  React.useEffect(() => {
+    if (
+      user?.role === 'driver' &&
+      (currentView === 'home' ||
+        currentView === 'customer-home' ||
+        currentView === 'customer-trips' ||
+        currentView === 'customer-wallet' ||
+        currentView === 'customer-profile')
+    ) {
+      setCurrentView('driver-home');
+    } else if (
+      user?.role === 'customer' &&
+      (currentView === 'driver' ||
+        currentView === 'driver-home' ||
+        currentView === 'driver-earnings' ||
+        currentView === 'driver-welfare' ||
+        currentView === 'driver-kyc' ||
+        currentView === 'driver-rides' ||
+        currentView === 'admin-dashboard')
+    ) {
+      setCurrentView('customer-home');
+    } else if (
+      user?.role === 'admin' &&
+      (currentView === 'home' || currentView === 'customer-home' || currentView === 'driver-home')
+    ) {
+      setCurrentView('admin-dashboard');
+    }
+  }, [user?.role]);
+
   // Role-based view resolver
   const renderCurrentView = () => {
-    // If Admin role is selected, view Admin panel by default unless specific tab selected
-    if (user?.role === 'admin' && (currentView === 'home' || currentView === 'admin' || currentView === 'admin-dashboard')) {
+    // 1. Explicit Driver Views (Always render Driver portal components)
+    if (
+      currentView === 'driver' ||
+      currentView === 'driver-home' ||
+      (user?.role === 'driver' && (currentView === 'home' || currentView === 'customer-home'))
+    ) {
+      return <DriverHome />;
+    }
+    if (
+      currentView === 'driver-earnings' ||
+      (user?.role === 'driver' && currentView === 'earnings')
+    ) {
+      return <DriverEarnings />;
+    }
+    if (
+      currentView === 'driver-welfare' ||
+      currentView === 'epfo-esic' ||
+      (user?.role === 'driver' && currentView === 'welfare')
+    ) {
+      return <DriverWelfare />;
+    }
+    if (
+      currentView === 'driver-kyc' ||
+      currentView === 'kyc' ||
+      (user?.role === 'driver' && currentView === 'profile')
+    ) {
+      return <DriverProfileKYC />;
+    }
+    if (
+      currentView === 'driver-rides' ||
+      (user?.role === 'driver' && currentView === 'rides')
+    ) {
+      return <DriverRides />;
+    }
+
+    // 2. Admin Views
+    if (
+      currentView === 'admin' ||
+      currentView === 'admin-dashboard' ||
+      (user?.role === 'admin' && (currentView === 'home' || currentView === 'admin'))
+    ) {
       return <AdminDashboard />;
     }
 
-    // If Driver role is selected
-    if (user?.role === 'driver') {
-      if (currentView === 'home' || currentView === 'driver' || currentView === 'driver-home') return <DriverHome />;
-      if (currentView === 'earnings' || currentView === 'driver-earnings') return <DriverEarnings />;
-      if (currentView === 'welfare' || currentView === 'driver-welfare' || currentView === 'epfo-esic') return <DriverWelfare />;
-      if (currentView === 'profile' || currentView === 'kyc' || currentView === 'driver-kyc') return <DriverProfileKYC />;
-      if (currentView === 'rides') return <DriverRides />;
-      if (currentView === 'support') return <CustomerSupport />;
-    }
-
-    // Public / Customer Views
+    // 3. Public / Customer Views
     switch (currentView) {
       case 'home':
       case 'customer-home':
         return <CustomerHome />;
       case 'trips':
       case 'customer-trips':
-        return <CustomerTrips onRebook={() => setCurrentView('customer-home')} />;
+        return <CustomerTrips onRebook={() => handleNavigate('customer-home')} />;
       case 'wallet':
       case 'customer-wallet':
         return <CustomerWallet />;
@@ -109,15 +213,15 @@ const MainContent: React.FC = () => {
       case 'customer-support':
         return <CustomerSupport />;
       case 'how-it-works':
-        return <HowItWorks onBookNow={() => setCurrentView('customer-home')} />;
+        return <HowItWorks onBookNow={() => handleNavigate('customer-home')} />;
       case 'safety':
         return <SafetyPage />;
       case 'drive':
-        return <DriveWithUs onRegistered={() => setCurrentView('driver-home')} />;
+        return <DriveWithUs onRegistered={() => handleNavigate('driver-home')} />;
       case 'landing':
-        return <LandingHome onBookNow={() => setCurrentView('customer-home')} onDriveWithUs={() => setCurrentView('drive')} />;
+        return <LandingHome onBookNow={() => handleNavigate('customer-home')} onDriveWithUs={() => handleNavigate('drive')} />;
       default:
-        return <CustomerHome />;
+        return user?.role === 'driver' ? <DriverHome /> : <CustomerHome />;
     }
   };
 
@@ -130,7 +234,7 @@ const MainContent: React.FC = () => {
       {/* 2. Top Navigation Bar with Light Green & Orange branding */}
       <Navbar 
         currentView={currentView} 
-        onNavigate={(v) => setCurrentView(v)} 
+        onNavigate={handleNavigate} 
         onOpenAuth={() => setIsAuthOpen(true)} 
       />
 
@@ -147,9 +251,9 @@ const MainContent: React.FC = () => {
         isOpen={isAuthOpen} 
         onClose={() => setIsAuthOpen(false)}
         onSuccess={(role) => {
-          if (role === 'customer') setCurrentView('customer-home');
-          else if (role === 'driver') setCurrentView('driver-home');
-          else if (role === 'admin') setCurrentView('admin-dashboard');
+          if (role === 'customer') handleNavigate('customer-home');
+          else if (role === 'driver') handleNavigate('driver-home');
+          else if (role === 'admin') handleNavigate('admin-dashboard');
         }}
       />
 
@@ -229,27 +333,27 @@ const MainContent: React.FC = () => {
               </h4>
               <ul className="space-y-2 text-xs font-medium">
                 <li>
-                  <button onClick={() => setIsAuthOpen(true)} className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1">
+                  <button onClick={() => setIsAuthOpen(true)} className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer">
                     <span>🔑 Role Login Portal</span>
                   </button>
                 </li>
                 <li>
-                  <button onClick={() => setCurrentView('customer-home')} className="hover:text-white transition-colors">
+                  <button onClick={() => handleNavigate('customer-home')} className="hover:text-white transition-colors cursor-pointer">
                     Passenger Booking
                   </button>
                 </li>
                 <li>
-                  <button onClick={() => setCurrentView('driver-home')} className="hover:text-white transition-colors">
-                    Driver Partner Console
+                  <button onClick={() => handleNavigate('driver-home')} className="hover:text-white transition-colors cursor-pointer text-orange-400 font-bold">
+                    🚗 Driver Partner Console (Open)
                   </button>
                 </li>
                 <li>
-                  <button onClick={() => setCurrentView('admin-dashboard')} className="hover:text-white transition-colors">
+                  <button onClick={() => handleNavigate('admin-dashboard')} className="hover:text-white transition-colors cursor-pointer">
                     Bokakhat Admin Console
                   </button>
                 </li>
                 <li>
-                  <button onClick={() => setCurrentView('customer-support')} className="hover:text-white transition-colors">
+                  <button onClick={() => handleNavigate('customer-support')} className="hover:text-white transition-colors cursor-pointer">
                     24/7 Grievance Desk
                   </button>
                 </li>

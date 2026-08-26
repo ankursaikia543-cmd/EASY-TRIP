@@ -74,10 +74,14 @@ export const CustomerHome: React.FC = () => {
     return <ActiveRideTracker />;
   }
 
-  // Calculate live estimates
+  // Calculate live estimates based on Admin platform settings
   const distanceKm = FareService.calculateDistanceKm(pickup, destination);
   const durationMin = FareService.estimateDurationMin(distanceKm, selectedVehicle);
   const currentFareBreakdown = FareService.calculateFare(selectedVehicle, distanceKm, durationMin, platformSettings);
+
+  const bikeSettings = platformSettings.fares.bike || { baseFare: 25, pricePerKm: 9, minimumFare: 25 };
+  const autoSettings = platformSettings.fares.auto || { baseFare: 35, pricePerKm: 13, minimumFare: 35 };
+  const cabSettings = platformSettings.fares.cab || { baseFare: 65, pricePerKm: 17, minimumFare: 65 };
 
   const bikeFare = FareService.calculateFare('bike', distanceKm, FareService.estimateDurationMin(distanceKm, 'bike'), platformSettings);
   const autoFare = FareService.calculateFare('auto', distanceKm, FareService.estimateDurationMin(distanceKm, 'auto'), platformSettings);
@@ -303,15 +307,28 @@ export const CustomerHome: React.FC = () => {
                 </div>
               </div>
 
-              {/* Route Metric Bento Tag */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] font-black text-slate-700">
-                <div className="flex items-center gap-1">
-                  <Navigation className="w-3 h-3 text-emerald-600" />
-                  <span>{distanceKm} km (Live Distance)</span>
+              {/* Live Road Route Metric Bento Tag with Real Distance & Timing */}
+              <div className="p-3 bg-gradient-to-r from-emerald-50 via-teal-50 to-orange-50 rounded-xl border border-emerald-300 flex items-center justify-between text-xs font-black shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                    <Navigation className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">REAL DRIVING DISTANCE</span>
+                    <span className="text-sm font-black text-emerald-950 font-mono-num">{distanceKm} KM</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-orange-600" />
-                  <span>~{durationMin} mins</span>
+
+                <div className="h-7 w-px bg-emerald-200"></div>
+
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-orange-500 text-white flex items-center justify-center shadow-xs">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">ESTIMATED TIMING</span>
+                    <span className="text-sm font-black text-orange-950 font-mono-num">{FareService.formatDuration(durationMin)}</span>
+                  </div>
                 </div>
               </div>
 
@@ -321,11 +338,12 @@ export const CustomerHome: React.FC = () => {
           {/* Vehicle Selection Bento Tiles */}
           <div className="p-4 flex flex-col gap-2.5">
             <div className="flex items-center justify-between px-1 mt-1">
-              <h3 className="text-xs font-black text-slate-600 uppercase tracking-widest">
+              <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest">
                 Vehicle Rates for {distanceKm} km
               </h3>
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                Live Auto-calculated
+              <span className="text-[10px] font-black text-emerald-800 bg-emerald-100/90 px-2.5 py-1 rounded-full border border-emerald-300 flex items-center gap-1 shadow-2xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                <span>Admin Rates Auto-calculated</span>
               </span>
             </div>
 
@@ -346,12 +364,14 @@ export const CustomerHome: React.FC = () => {
                        <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center text-2xl font-black">🏍️</div>
                        <div>
                          <p className="font-display font-black text-sm text-slate-950 tracking-tight">EASY BIKE (KAZIRANGA EXPRESS)</p>
-                         <p className="text-[11px] text-slate-600 font-medium">Solo Ride • ₹9/km (Base ₹25)</p>
+                         <p className="text-[11px] text-slate-600 font-medium">
+                           Solo Ride • ₹{bikeSettings.pricePerKm}/km (Base ₹{bikeSettings.baseFare})
+                         </p>
                        </div>
                      </div>
                      <div className="text-right">
                        <p className="font-display font-black text-lg text-emerald-800 font-mono-num">₹{bikeFare.totalFare}</p>
-                       <span className="text-[10px] text-slate-400 font-medium">{distanceKm} km</span>
+                       <span className="text-[10px] text-slate-500 font-bold">{distanceKm} km</span>
                      </div>
                    </div>
                  );
@@ -373,12 +393,14 @@ export const CustomerHome: React.FC = () => {
                        <div className="w-11 h-11 rounded-xl bg-orange-100 text-orange-900 flex items-center justify-center text-2xl font-black">🛺</div>
                        <div>
                          <p className="font-display font-black text-sm text-slate-950 tracking-tight">EASY AUTO (3-SEATER)</p>
-                         <p className="text-[11px] text-slate-600 font-medium">Local Market & Town • ₹13/km (Base ₹35)</p>
+                         <p className="text-[11px] text-slate-600 font-medium">
+                           Local Market & Town • ₹{autoSettings.pricePerKm}/km (Base ₹{autoSettings.baseFare})
+                         </p>
                        </div>
                      </div>
                      <div className="text-right">
                        <p className="font-display font-black text-lg text-orange-700 font-mono-num">₹{autoFare.totalFare}</p>
-                       <span className="text-[10px] text-slate-400 font-medium">{distanceKm} km</span>
+                       <span className="text-[10px] text-slate-500 font-bold">{distanceKm} km</span>
                      </div>
                    </div>
                  );
@@ -400,16 +422,38 @@ export const CustomerHome: React.FC = () => {
                        <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center text-2xl font-black">🚗</div>
                        <div>
                          <p className="font-display font-black text-sm text-slate-950 tracking-tight">EASY CAB PRIME (AC)</p>
-                         <p className="text-[11px] text-slate-600 font-medium">4-Seater AC Sedan • ₹17/km (Base ₹65)</p>
+                         <p className="text-[11px] text-slate-600 font-medium">
+                           4-Seater AC Sedan • ₹{cabSettings.pricePerKm}/km (Base ₹{cabSettings.baseFare})
+                         </p>
                        </div>
                      </div>
                      <div className="text-right">
                        <p className="font-display font-black text-lg text-emerald-800 font-mono-num">₹{cabFare.totalFare}</p>
-                       <span className="text-[10px] text-slate-400 font-medium">{distanceKm} km</span>
+                       <span className="text-[10px] text-slate-500 font-bold">{distanceKm} km</span>
                      </div>
                    </div>
                  );
                })()}
+            </div>
+
+            {/* Live Pricing Breakdown Card */}
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1.5">
+              <div className="flex justify-between items-center text-slate-600 font-medium">
+                <span>Base Fare ({selectedVehicle.toUpperCase()}):</span>
+                <span className="font-mono-num font-bold text-slate-900">₹{currentFareBreakdown.baseFare}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600 font-medium">
+                <span>Distance Charge ({distanceKm} km × ₹{platformSettings.fares[selectedVehicle]?.pricePerKm || 15}/km):</span>
+                <span className="font-mono-num font-bold text-slate-900">₹{currentFareBreakdown.distanceFare}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600 font-medium">
+                <span>GST & Platform Safety Fee (5%):</span>
+                <span className="font-mono-num font-bold text-slate-900">₹{currentFareBreakdown.tax}</span>
+              </div>
+              <div className="flex justify-between items-center pt-1 border-t border-slate-200 font-black text-slate-950">
+                <span>Total Upfront Fare:</span>
+                <span className="font-mono-num text-sm text-emerald-800">₹{currentFareBreakdown.totalFare}</span>
+              </div>
             </div>
 
             {/* Book Button in Vibrant Green/Orange with Bold Typography */}

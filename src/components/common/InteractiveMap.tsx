@@ -578,6 +578,21 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           />
           <text x="830" y="240" fill="#64748b" fontSize="8" fontWeight="bold">Dergaon-Golaghat Link</text>
 
+          {/* Driver to Pickup Route Path when Driver is Assigned */}
+          {driverLocation && (
+            <line
+              x1={`${driverPos.x}%`}
+              y1={`${driverPos.y}%`}
+              x2={`${pickupPos.x}%`}
+              y2={`${pickupPos.y}%`}
+              stroke="#0284c7"
+              strokeWidth="4"
+              strokeDasharray="6,6"
+              strokeLinecap="round"
+              className="animate-dash"
+            />
+          )}
+
           {/* Active Navigation Route Path Connecting Selected Pickup & Destination */}
           {destination && (
             <>
@@ -701,38 +716,38 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           );
         })}
 
-        {/* 1. Dedicated Pickup Marker (Light Green Pin) */}
+        {/* 1. Dedicated Pickup Marker (High Visibility Light Green Pin with Order Origin Label) */}
         <div 
           style={{ top: `${pickupPos.y}%`, left: `${pickupPos.x}%` }}
           className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 pointer-events-none"
         >
           <div className="relative flex items-center justify-center">
-            <span className="animate-ping absolute inline-flex h-9 w-9 rounded-full bg-emerald-400 opacity-60"></span>
-            <div className="relative w-9 h-9 rounded-full bg-emerald-600 border-2 border-white shadow-xl flex items-center justify-center text-white">
+            <span className="animate-ping absolute inline-flex h-10 w-10 rounded-full bg-emerald-400 opacity-75"></span>
+            <div className="relative w-10 h-10 rounded-full bg-emerald-600 border-2 border-white shadow-xl flex items-center justify-center text-white">
               <MapPin className="w-5 h-5 fill-white" />
             </div>
           </div>
-          <div className="mt-1 px-2.5 py-1 bg-slate-950/90 text-white text-[11px] font-black rounded-lg shadow-md whitespace-nowrap border border-emerald-500/60 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>Pickup: {pickup?.address ? pickup.address.split(',')[0] : 'Bokakhat'}</span>
+          <div className="mt-1 px-3 py-1 bg-emerald-950/95 text-white text-[11px] font-black rounded-xl shadow-lg whitespace-nowrap border border-emerald-400 flex items-center gap-1.5 backdrop-blur-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>📍 PICKUP (ORDER ORIGIN): {pickup?.address ? pickup.address.split(',')[0] : 'Bokakhat'}</span>
           </div>
         </div>
 
-        {/* 2. Dedicated Destination Marker (Warm Orange Flag) */}
+        {/* 2. Dedicated Destination Marker (Warm Orange Flag with Drop Label) */}
         {destination && destPos && (
           <div 
             style={{ top: `${destPos.y}%`, left: `${destPos.x}%` }}
             className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 pointer-events-none"
           >
             <div className="relative flex items-center justify-center">
-              <span className="animate-ping absolute inline-flex h-9 w-9 rounded-full bg-orange-400 opacity-60"></span>
-              <div className="relative w-9 h-9 rounded-full bg-orange-600 border-2 border-white shadow-xl flex items-center justify-center text-white">
+              <span className="animate-ping absolute inline-flex h-10 w-10 rounded-full bg-orange-400 opacity-75"></span>
+              <div className="relative w-10 h-10 rounded-full bg-orange-600 border-2 border-white shadow-xl flex items-center justify-center text-white">
                 <Flag className="w-5 h-5 fill-white" />
               </div>
             </div>
-            <div className="mt-1 px-2.5 py-1 bg-slate-950/90 text-white text-[11px] font-black rounded-lg shadow-md whitespace-nowrap border border-orange-500/60 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></span>
-              <span>Drop: {destination.address ? destination.address.split(',')[0] : 'Golaghat Town'}</span>
+            <div className="mt-1 px-3 py-1 bg-orange-950/95 text-white text-[11px] font-black rounded-xl shadow-lg whitespace-nowrap border border-orange-400 flex items-center gap-1.5 backdrop-blur-xs">
+              <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span>
+              <span>🎯 DROP (DESTINATION): {destination.address ? destination.address.split(',')[0] : 'Golaghat Town'}</span>
             </div>
           </div>
         )}

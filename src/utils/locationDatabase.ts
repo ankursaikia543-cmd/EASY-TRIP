@@ -1730,22 +1730,56 @@ export function findLocationByQuery(query: string): LocationItem | null {
   const q = (query || '').toLowerCase().trim();
   if (!q) return null;
 
-  // 1. Exact or partial match in ALL_ASSAM_LOCATIONS
+  // 1. Direct exact or substring match in ALL_ASSAM_LOCATIONS
   const directMatch = ALL_ASSAM_LOCATIONS.find(loc => {
     const n = loc.name.toLowerCase();
     const a = loc.address.toLowerCase();
     const c = loc.city.toLowerCase();
     const t = loc.tag.toLowerCase();
-    return n === q || a === q || n.includes(q) || q.includes(n) || c === q || (q.length >= 3 && t.includes(q));
+    const lm = loc.landmark ? loc.landmark.toLowerCase() : '';
+    return n === q || a === q || n.includes(q) || q.includes(n) || c === q || (q.length >= 3 && (t.includes(q) || lm.includes(q)));
   });
 
   if (directMatch) return directMatch;
 
-  // 2. City fallback for major keywords
-  if (q.includes('jorhat') || q.includes('rowriah') || q.includes('jmch') || q.includes('titabar') || q.includes('mariani')) {
+  // 2. Sub-word matching (split by space/comma)
+  const tokens = q.split(/[\s,]+/).filter(w => w.length > 2);
+  for (const token of tokens) {
+    const tokenMatch = ALL_ASSAM_LOCATIONS.find(loc => {
+      const n = loc.name.toLowerCase();
+      const a = loc.address.toLowerCase();
+      const c = loc.city.toLowerCase();
+      return n.includes(token) || a.includes(token) || c.includes(token);
+    });
+    if (tokenMatch) return tokenMatch;
+  }
+
+  // 3. Fallbacks for key Golaghat / Assam regions
+  if (q.includes('bokakhat') || q.includes('bkt') || q.includes('panbari') || q.includes('mohor')) {
+    return ALL_ASSAM_LOCATIONS.find(l => l.id === 'bkt-main') || null;
+  }
+  if (q.includes('kaziranga') || q.includes('kohora') || q.includes('bagori') || q.includes('rhino')) {
+    return ALL_ASSAM_LOCATIONS.find(l => l.id === 'kzr-kohora') || null;
+  }
+  if (q.includes('numaligarh') || q.includes('nrl') || q.includes('refinery')) {
+    return ALL_ASSAM_LOCATIONS.find(l => l.id === 'num-town') || null;
+  }
+  if (q.includes('dergaon') || q.includes('police academy') || q.includes('negheriting')) {
+    return ALL_ASSAM_LOCATIONS.find(l => l.id === 'drg-chariali') || null;
+  }
+  if (q.includes('furkating') || q.includes('fkt')) {
+    return ALL_ASSAM_LOCATIONS.find(l => l.id === 'fkt-junction') || null;
+  }
+  if (q.includes('sarupathar') || q.includes('barpathar') || q.includes('dhansiri')) {
+    return ALL_ASSAM_LOCATIONS.find(l => l.id === 'srp-town') || null;
+  }
+  if (q.includes('golaghat') || q.includes('court') || q.includes('dc office') || q.includes('amulapatty')) {
+    return ALL_ASSAM_LOCATIONS.find(l => l.id === 'glt-court') || null;
+  }
+  if (q.includes('jorhat') || q.includes('rowriah') || q.includes('jmch') || q.includes('titabar') || q.includes('mariani') || q.includes('isbt')) {
     return ALL_ASSAM_LOCATIONS.find(l => l.id === 'jrh-isbt') || null;
   }
-  if (q.includes('guwahati') || q.includes('borjhar') || q.includes('paltan') || q.includes('khanapara') || q.includes('dispur') || q.includes('six mile') || q.includes('gmch')) {
+  if (q.includes('guwahati') || q.includes('borjhar') || q.includes('paltan') || q.includes('khanapara') || q.includes('dispur') || q.includes('six mile') || q.includes('gmch') || q.includes('gau')) {
     return ALL_ASSAM_LOCATIONS.find(l => l.id === 'ghy-paltan') || null;
   }
   if (q.includes('dibrugarh') || q.includes('mohanbari') || q.includes('amch') || q.includes('bogibeel') || q.includes('moran')) {
@@ -1767,5 +1801,24 @@ export function findLocationByQuery(query: string): LocationItem | null {
     return ALL_ASSAM_LOCATIONS.find(l => l.id === 'tsk-station') || null;
   }
 
-  return null;
+  // 4. Fallback: generate pseudo deterministic coordinate in Golaghat region so calculation never fails
+  let hash = 0;
+  for (let i = 0; i < q.length; i++) {
+    hash = (hash << 5) - hash + q.charCodeAt(i);
+    hash |= 0;
+  }
+  const latOffset = ((Math.abs(hash) % 100) / 1000) * 0.4;
+  const lngOffset = (((Math.abs(hash) >> 4) % 100) / 1000) * 0.4;
+
+  return {
+    id: `custom-${Math.abs(hash)}`,
+    name: query,
+    address: `${query}, Golaghat District, Assam`,
+    lat: 26.5186 + latOffset,
+    lng: 93.9688 + lngOffset,
+    city: 'Golaghat Region',
+    region: 'golaghat',
+    category: 'town',
+    tag: 'Custom Search Point',
+  };
 }
