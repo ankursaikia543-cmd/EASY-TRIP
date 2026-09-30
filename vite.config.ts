@@ -16,28 +16,7 @@ export default defineConfig(() => {
         manifest: {
           name: 'EASY TRIP',
           short_name: 'EASY TRIP',
-          description: 'Local ride-booking platform for Bikes, Au',
-          theme_color: '#059669',
-          background_color: '#0f172a',
-          display: 'standalone',
-          orientation: 'portrait',
-          icons: [
-            {
-              src: '/logo.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'any maskable',
-  return {
-    plugins: [
-      react(),
-      tailwindcss(),
-      VitePWA({
-        registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'logo.png', 'robots.txt'],
-        manifest: {
-          name: 'EASY TRIP',
-          short_name: 'EASY TRIP',
-          description: 'Local ride-booking platform for Bikes, Autos, and Cabs across Golaghat District, Assam.',
+          description: 'Local ride-booking platform for Bikes, Autos',
           theme_color: '#059669',
           background_color: '#0f172a',
           display: 'standalone',
@@ -49,24 +28,19 @@ export default defineConfig(() => {
               type: 'image/png',
               purpose: 'any maskable',
             },
-          ],
-        },
-        workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
-        },
-      }),
+            {
+              src: '/logo.png',
+              sizes: '192x192',
+              type: 'image/png',
+            }
+          ]
+        }
+      })
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
-      },
-    },
-    server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
-    },
+        "@": path.resolve(__dirname, "./src"),
+      }
+    }
   };
 });
