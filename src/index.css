@@ -1,43 +1,86 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-display: "Outfit", "Plus Jakarta Sans", system-ui, sans-serif;
-  --font-mono: "Space Grotesk", ui-monospace, monospace;
-}
-
 @layer base {
-  body {
-    font-family: var(--font-sans);
-    letter-spacing: -0.01em;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-display);
-    letter-spacing: -0.025em;
+  * {
+    font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 }
 
-.font-display {
-  font-family: var(--font-display);
+/* Leaflet Map Styling */
+.leaflet-tile {
+  animation: none !important;
+}
+.leaflet-layer {
+  animation: none !important;
+}
+.leaflet-fade-anim .leaflet-tile {
+  opacity: 1 !important;
 }
 
-.font-mono-num {
-  font-family: var(--font-mono);
-  font-feature-settings: "tnum" 1;
+/* Animated Blue Dot Route Line */
+@keyframes flowDash {
+  0% {
+    stroke-dashoffset: 24;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
 }
 
-.tracking-tightest {
-  letter-spacing: -0.04em;
+.blue-dot-route {
+  stroke-dasharray: 8 12;
+  stroke-linecap: round;
+  animation: flowDash 1s linear infinite;
+  filter: drop-shadow(0 2px 6px rgba(37, 99, 235, 0.45));
 }
 
-.tracking-display {
-  letter-spacing: -0.03em;
+.blue-dot-glow {
+  stroke-dasharray: 6 10;
+  stroke-linecap: round;
+  animation: flowDash 1.2s linear infinite;
 }
 
-.tracking-eyebrow {
-  letter-spacing: 0.14em;
+/* Pulse animation for driver live marker and pending order */
+@keyframes livePulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 14px rgba(34, 197, 94, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
 }
 
+@keyframes ringWarningPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8);
+  }
+  50% {
+    transform: scale(1.03);
+    box-shadow: 0 0 0 16px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+.pulse-live {
+  animation: livePulse 1.8s infinite;
+}
+
+.pulse-ringing {
+  animation: ringWarningPulse 1s infinite;
+}
+
+/* Smooth marker rotation for vehicle moving direction */
+.vehicle-marker {
+  transition: transform 0.35s ease-out;
+  transform-origin: center center;
+}
